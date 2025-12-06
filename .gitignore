@@ -1,5 +1,9 @@
 node_modules/
 dist/
+build/
+.pub-cache/
+.dart-tool/
+flutter_app/build/
 .env
 coverage/
 *.log
