@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  TableInheritance,
 } from 'typeorm';
 import { Station } from './Station';
 
@@ -23,15 +24,13 @@ export enum VehicleStatus {
 }
 
 @Entity('vehicles')
+@TableInheritance({ column: { name: 'type', type: 'varchar' } })
 export class Vehicle {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({
-    type: 'enum',
-    enum: VehicleType,
-  })
-  type: VehicleType;
+  @Column({ type: 'varchar', length: 50, default: () => "'vehicle'" })
+  type: string;
 
   @Column({ type: 'varchar', length: 100 })
   model: string;
