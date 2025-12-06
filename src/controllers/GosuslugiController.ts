@@ -42,12 +42,42 @@ export class GosuslugiController {
         return;
       }
 
-      // Find or create user based on Gosuslugi ID
-      let user = await this.userService.findByGosuslugiId(userInfo.id);
+      // Check if user exists by gosuslugi_id
+      let existingUser = await this.userService.findByGosuslugiId(userInfo.id);
 
-      if (!user) {
+      if (existingUser) {
+        // User already exists, just update binding info
+        await this.userService.updateGosuslugiBinding(existingUser.id, {
+          email: userInfo.email,
+          phone: userInfo.phone,
+          isVerified: true
+        });
+
+        // Generate JWT tokens
+        const { accessToken, refreshToken } = await this.userService.generateTokens(existingUser.id);
+
+        // Set refresh token in HTTP-only cookie
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // Return access token
+        res.status(200).json({
+          accessToken,
+          user: {
+            id: existingUser.id,
+            gosuslugi_id: existingUser.gosuslugi_id,
+            email: userInfo.email,
+            phone: userInfo.phone,
+            first_name: userInfo.firstName,
+            last_name: userInfo.lastName
+          }
+        });
+      } else {
         // Create new user with basic info
-        user = await this.userService.createUserWithProfileAndBinding({
+        const newUser = await this.userService.createUserWithProfileAndBinding({
           gosuslugiId: userInfo.id,
           email: userInfo.email,
           phone: userInfo.phone,
@@ -57,37 +87,30 @@ export class GosuslugiController {
           birthDate: userInfo.birthDate,
           passportNumber: userInfo.passportSeriesNumber // Simplified as passport number
         });
-      } else {
-        // Update existing user's binding info
-        await this.userService.updateGosuslugiBinding(user.id, {
-          email: userInfo.email,
-          phone: userInfo.phone,
-          isVerified: true
+
+        // Generate JWT tokens
+        const { accessToken, refreshToken } = await this.userService.generateTokens(newUser.id);
+
+        // Set refresh token in HTTP-only cookie
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // Return access token
+        res.status(200).json({
+          accessToken,
+          user: {
+            id: newUser.id,
+            gosuslugi_id: newUser.gosuslugi_id,
+            email: userInfo.email,
+            phone: userInfo.phone,
+            first_name: userInfo.firstName,
+            last_name: userInfo.lastName
+          }
         });
       }
-
-      // Generate JWT tokens
-      const { accessToken, refreshToken } = await this.userService.generateTokens(user.id);
-
-      // Set refresh token in HTTP-only cookie
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
-
-      // Return access token
-      res.status(200).json({
-        accessToken,
-        user: {
-          id: user.id,
-          gosuslugi_id: user.gosuslugi_id,
-          email: userInfo.email,
-          phone: userInfo.phone,
-          first_name: userInfo.firstName,
-          last_name: userInfo.lastName
-        }
-      });
     } catch (error) {
       console.error('Error handling Gosuslugi callback:', error);
       res.status(500).json({ message: 'Failed to handle Gosuslugi callback' });

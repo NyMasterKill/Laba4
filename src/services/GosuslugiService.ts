@@ -45,7 +45,7 @@ export class GosuslugiService {
 
   async getAuthUrl(): Promise<string> {
     const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
+
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
@@ -53,7 +53,7 @@ export class GosuslugiService {
       scope: 'fullname email',
       state: state
     });
-    
+
     return `${this.authorizationUrl}?${params.toString()}`;
   }
 
@@ -123,6 +123,7 @@ export class GosuslugiService {
       age--;
     }
 
+    // Возраст должен быть не менее 14 лет
     return age >= 14;
   }
 }
