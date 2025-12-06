@@ -2,27 +2,35 @@
   "name": "laba4-backend",
   "version": "1.0.0",
   "description": "Backend for Laba4 project",
-  "main": "dist/index.js",
+  "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "start:dev": "ts-node src/index.ts",
+    "start": "node dist/server.js",
+    "start:dev": "ts-node src/server.ts",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "typeorm-ts-node-commonjs -d ./src/config/typeorm.config.ts migration:generate",
     "migration:run": "typeorm-ts-node-commonjs -d ./src/config/typeorm.config.ts migration:run",
     "migration:revert": "typeorm-ts-node-commonjs -d ./src/config/typeorm.config.ts migration:revert"
   },
-  "keywords": ["typeorm", "postgres", "typescript"],
+  "keywords": [
+    "typeorm",
+    "postgres",
+    "typescript"
+  ],
   "author": "NyMasterKill",
   "license": "MIT",
   "dependencies": {
-    "typescript": "^5.0.0",
-    "typeorm": "^0.3.17",
-    "pg": "^8.11.0",
     "@types/node": "^20.0.0",
-    "ts-node": "^10.9.0"
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.11.0",
+    "ts-node": "^10.9.0",
+    "typeorm": "^0.3.17",
+    "typescript": "^5.0.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.6.0"
   }
 }
