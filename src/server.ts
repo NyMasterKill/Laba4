@@ -3,17 +3,27 @@ import { AppDataSource } from './config/typeorm.config';
 import profileRoutes from './routes/profileRoutes';
 import vehicleRoutes from './routes/vehicleRoutes';
 import stationRoutes from './routes/stationRoutes';
+import gosuslugiRoutes from './routes/gosuslugiRoutes';
+import authRoutes from './routes/authRoutes';
+import twoFactorAuthRoutes from './routes/twoFactorAuthRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Cookies for refresh tokens
+app.use(require('cookie-parser')());
 
 // Routes
 app.use('/api', profileRoutes);
 app.use('/api', vehicleRoutes); // Добавляем маршруты для транспортных средств
 app.use('/api', stationRoutes); // Добавляем маршруты для станций
+app.use('/api', gosuslugiRoutes); // Добавляем маршруты для интеграции с Госуслугами
+app.use('/api', authRoutes); // Добавляем маршруты для аутентификации
+app.use('/api', twoFactorAuthRoutes); // Добавляем маршруты для 2FA
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
