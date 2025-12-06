@@ -181,4 +181,18 @@ export class UserService {
       return false;
     }
   }
+
+  verifyToken(token: string) {
+    try {
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'default_secret_key'
+      ) as { userId: string };
+
+      return decoded;
+    } catch (error) {
+      console.error('Token verification error:', error);
+      return null;
+    }
+  }
 }

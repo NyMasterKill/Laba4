@@ -4,6 +4,7 @@ import profileRoutes from './routes/profileRoutes';
 import vehicleRoutes from './routes/vehicleRoutes';
 import stationRoutes from './routes/stationRoutes';
 import gosuslugiRoutes from './routes/gosuslugiRoutes';
+import authRoutes from './routes/authRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.use('/api', profileRoutes);
 app.use('/api', vehicleRoutes); // Добавляем маршруты для транспортных средств
 app.use('/api', stationRoutes); // Добавляем маршруты для станций
 app.use('/api', gosuslugiRoutes); // Добавляем маршруты для интеграции с Госуслугами
+app.use('/api', authRoutes); // Добавляем маршруты для аутентификации
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
