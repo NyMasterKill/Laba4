@@ -3,12 +3,18 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Profile } from './Profile';
 import { GosuslugiBinding } from './GosuslugiBinding';
+import { Booking } from './Booking';
+import { Ride } from './Ride';
+import { Payment } from './Payment';
+import { Fine } from './Fine';
+import { Subscription } from './Subscription';
 
 @Entity('users')
 export class User {
@@ -18,7 +24,7 @@ export class User {
   @Column({ unique: true })
   gosuslugi_id: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, unique: true })
   phone: string;
 
   @Column({ type: 'boolean', default: false })
@@ -30,10 +36,46 @@ export class User {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToOne(() => Profile, (profile) => profile.user)
+  @OneToOne(() => Profile, (profile) => profile.user, { 
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
   @JoinColumn({ name: 'profile_id' })
   profile: Profile;
 
-  @OneToOne(() => GosuslugiBinding, (binding) => binding.user)
+  @OneToOne(() => GosuslugiBinding, (binding) => binding.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
   gosuslugi_binding: GosuslugiBinding;
+
+  @OneToMany(() => Booking, (booking) => booking.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  bookings: Booking[];
+
+  @OneToMany(() => Ride, (ride) => ride.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  rides: Ride[];
+
+  @OneToMany(() => Payment, (payment) => payment.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  payments: Payment[];
+
+  @OneToMany(() => Fine, (fine) => fine.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  fines: Fine[];
+
+  @OneToMany(() => Subscription, (subscription) => subscription.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  subscriptions: Subscription[];
 }

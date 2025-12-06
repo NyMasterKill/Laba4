@@ -35,7 +35,8 @@ export class GosuslugiBinding {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => User, (user) => user.gosuslugi_binding)
-  @JoinColumn({ name: 'user_id' })
+  @ManyToOne(() => User, (user) => user.gosuslugi_binding, {
+    onDelete: 'CASCADE'
+  })
   user: User;
 }

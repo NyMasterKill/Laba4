@@ -59,15 +59,21 @@ export class Ride {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => User, (user) => user.id)
+  @ManyToOne(() => User, (user) => user.rides, {
+    onDelete: 'CASCADE'
+  })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Vehicle, (vehicle) => vehicle.id)
+  @ManyToOne(() => Vehicle, (vehicle) => vehicle.rides, {
+    onDelete: 'RESTRICT'
+  })
   @JoinColumn({ name: 'vehicle_id' })
   vehicle: Vehicle;
 
-  @ManyToOne(() => Booking, (booking) => booking.id)
+  @ManyToOne(() => Booking, (booking) => booking.rides, {
+    onDelete: 'SET NULL'
+  })
   @JoinColumn({ name: 'booking_id' })
   booking: Booking;
 }

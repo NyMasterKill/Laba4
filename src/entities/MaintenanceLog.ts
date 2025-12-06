@@ -66,11 +66,15 @@ export class MaintenanceLog {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => Vehicle, (vehicle) => vehicle.id)
+  @ManyToOne(() => Vehicle, (vehicle) => vehicle.maintenance_logs, {
+    onDelete: 'CASCADE'
+  })
   @JoinColumn({ name: 'vehicle_id' })
   vehicle: Vehicle;
 
-  @ManyToOne(() => Employee, (employee) => employee.id)
+  @ManyToOne(() => Employee, (employee) => employee.maintenance_logs, {
+    onDelete: 'SET NULL'
+  })
   @JoinColumn({ name: 'performed_by' })
   performed_by: Employee;
 }

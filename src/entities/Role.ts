@@ -38,6 +38,8 @@ export class Role {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => Employee, (employee) => employee.role)
+  @OneToMany(() => Employee, (employee) => employee.role, {
+    cascade: true
+  })
   employees: Employee[];
 }

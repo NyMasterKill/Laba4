@@ -34,6 +34,8 @@ export class TariffPlan {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => Subscription, (subscription) => subscription.tariff_plan)
+  @OneToMany(() => Subscription, (subscription) => subscription.tariff_plan, {
+    cascade: true
+  })
   subscriptions: Subscription[];
 }

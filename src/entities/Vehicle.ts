@@ -3,12 +3,16 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
   TableInheritance,
 } from 'typeorm';
 import { Station } from './Station';
+import { Booking } from './Booking';
+import { Ride } from './Ride';
+import { MaintenanceLog } from './MaintenanceLog';
 
 export enum VehicleType {
   BICYCLE = 'bicycle',
@@ -66,7 +70,24 @@ export class Vehicle {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => Station, (station) => station.vehicles)
+  @ManyToOne(() => Station, (station) => station.vehicles, {
+    onDelete: 'SET NULL'
+  })
   @JoinColumn({ name: 'station_id' })
   station: Station;
+
+  @OneToMany(() => Booking, (booking) => booking.vehicle, {
+    cascade: true
+  })
+  bookings: Booking[];
+
+  @OneToMany(() => Ride, (ride) => ride.vehicle, {
+    cascade: true
+  })
+  rides: Ride[];
+
+  @OneToMany(() => MaintenanceLog, (log) => log.vehicle, {
+    cascade: true
+  })
+  maintenance_logs: MaintenanceLog[];
 }

@@ -45,7 +45,8 @@ export class Profile {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => User, (user) => user.profile)
-  @JoinColumn({ name: 'user_id' })
+  @ManyToOne(() => User, (user) => user.profile, {
+    onDelete: 'CASCADE'
+  })
   user: User;
 }

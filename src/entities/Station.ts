@@ -37,6 +37,8 @@ export class Station {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => Vehicle, (vehicle) => vehicle.station)
+  @OneToMany(() => Vehicle, (vehicle) => vehicle.station, {
+    cascade: true
+  })
   vehicles: Vehicle[];
 }

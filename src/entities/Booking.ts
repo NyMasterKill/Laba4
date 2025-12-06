@@ -3,12 +3,14 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from './User';
 import { Vehicle } from './Vehicle';
+import { Ride } from './Ride';
 
 export enum BookingStatus {
   ACTIVE = 'active',
@@ -44,11 +46,20 @@ export class Booking {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => User, (user) => user.id)
+  @ManyToOne(() => User, (user) => user.bookings, {
+    onDelete: 'CASCADE'
+  })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Vehicle, (vehicle) => vehicle.id)
+  @ManyToOne(() => Vehicle, (vehicle) => vehicle.bookings, {
+    onDelete: 'RESTRICT'
+  })
   @JoinColumn({ name: 'vehicle_id' })
   vehicle: Vehicle;
+
+  @OneToMany(() => Ride, (ride) => ride.booking, {
+    cascade: true
+  })
+  rides: Ride[];
 }

@@ -44,11 +44,15 @@ export class Subscription {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => User, (user) => user.id)
+  @ManyToOne(() => User, (user) => user.subscriptions, {
+    onDelete: 'CASCADE'
+  })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => TariffPlan, (tariffPlan) => tariffPlan.id)
+  @ManyToOne(() => TariffPlan, (tariffPlan) => tariffPlan.subscriptions, {
+    onDelete: 'RESTRICT'
+  })
   @JoinColumn({ name: 'tariff_plan_id' })
   tariff_plan: TariffPlan;
 }

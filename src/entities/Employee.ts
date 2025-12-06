@@ -3,11 +3,13 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Role } from './Role';
+import { MaintenanceLog } from './MaintenanceLog';
 
 @Entity('employees')
 export class Employee {
@@ -41,7 +43,14 @@ export class Employee {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @ManyToOne(() => Role, (role) => role.id)
+  @ManyToOne(() => Role, (role) => role.employees, {
+    onDelete: 'SET NULL'
+  })
   @JoinColumn({ name: 'role_id' })
   role: Role;
+
+  @OneToMany(() => MaintenanceLog, (log) => log.performed_by, {
+    cascade: true
+  })
+  maintenance_logs: MaintenanceLog[];
 }
