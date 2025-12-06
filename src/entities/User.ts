@@ -15,6 +15,7 @@ import { Ride } from './Ride';
 import { Payment } from './Payment';
 import { Fine } from './Fine';
 import { Subscription } from './Subscription';
+import { UserSession } from './UserSession';
 
 @Entity('users')
 export class User {
@@ -36,7 +37,7 @@ export class User {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToOne(() => Profile, (profile) => profile.user, { 
+  @OneToOne(() => Profile, (profile) => profile.user, {
     cascade: true,
     onDelete: 'CASCADE'
   })
@@ -78,4 +79,10 @@ export class User {
     onDelete: 'CASCADE'
   })
   subscriptions: Subscription[];
+
+  @OneToMany(() => UserSession, (session) => session.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  sessions: UserSession[];
 }
