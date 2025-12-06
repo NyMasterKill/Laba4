@@ -3,17 +3,23 @@ import { AppDataSource } from './config/typeorm.config';
 import profileRoutes from './routes/profileRoutes';
 import vehicleRoutes from './routes/vehicleRoutes';
 import stationRoutes from './routes/stationRoutes';
+import gosuslugiRoutes from './routes/gosuslugiRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Cookies for refresh tokens
+app.use(require('cookie-parser')());
 
 // Routes
 app.use('/api', profileRoutes);
 app.use('/api', vehicleRoutes); // Добавляем маршруты для транспортных средств
 app.use('/api', stationRoutes); // Добавляем маршруты для станций
+app.use('/api', gosuslugiRoutes); // Добавляем маршруты для интеграции с Госуслугами
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
