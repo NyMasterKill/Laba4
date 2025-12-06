@@ -16,6 +16,7 @@ import { Payment } from './Payment';
 import { Fine } from './Fine';
 import { Subscription } from './Subscription';
 import { UserSession } from './UserSession';
+import { VerificationCode } from './VerificationCode';
 
 @Entity('users')
 export class User {
@@ -85,4 +86,10 @@ export class User {
     onDelete: 'CASCADE'
   })
   sessions: UserSession[];
+
+  @OneToMany(() => VerificationCode, (verificationCode) => verificationCode.user, {
+    cascade: true,
+    onDelete: 'CASCADE'
+  })
+  verificationCodes: VerificationCode[];
 }

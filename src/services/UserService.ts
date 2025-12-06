@@ -40,6 +40,31 @@ export class UserService {
     return binding ? binding.user : null;
   }
 
+  async findByPhoneOrEmail(destination: string): Promise<User | null> {
+    // Поиск по телефону
+    if (destination.startsWith('+')) {
+      return await this.userRepository.findOne({
+        where: { phone: destination },
+        relations: ['profile', 'sessions']
+      });
+    }
+
+    // Поиск по email (предполагаем, что email содержит символ @)
+    if (destination.includes('@')) {
+      const binding = await this.gosuslugiBindingRepository.findOne({
+        where: { email: destination },
+        relations: ['user', 'user.profile', 'user.sessions']
+      });
+      return binding ? binding.user : null;
+    }
+
+    // Если не email и не начинается с +, предполагаем, что это телефон
+    return await this.userRepository.findOne({
+      where: { phone: destination },
+      relations: ['profile', 'sessions']
+    });
+  }
+
   async createUserWithProfileAndBinding(userData: CreateUserWithProfileAndBindingData): Promise<User> {
     const user = new User();
     user.gosuslugi_id = userData.gosuslugiId;
