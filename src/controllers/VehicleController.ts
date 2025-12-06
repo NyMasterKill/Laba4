@@ -36,6 +36,7 @@ export class VehicleController {
 
   async getVehiclesAtStation(req: Request, res: Response): Promise<void> {
     try {
+      // Валидация параметров уже выполнена в маршрутах
       const { stationId } = req.params;
 
       if (!stationId) {

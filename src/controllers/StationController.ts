@@ -23,6 +23,7 @@ export class StationController {
 
   async getStationById(req: Request, res: Response): Promise<void> {
     try {
+      // Валидация параметров уже выполнена в маршрутах
       const { id } = req.params;
 
       if (!id) {
@@ -46,6 +47,7 @@ export class StationController {
 
   async getVehiclesAtStation(req: Request, res: Response): Promise<void> {
     try {
+      // Валидация параметров уже выполнена в маршрутах
       const { stationId } = req.params;
 
       if (!stationId) {
@@ -54,7 +56,7 @@ export class StationController {
       }
 
       const vehicles = await this.vehicleService.getVehiclesAtStation(stationId);
-      
+
       res.status(200).json(vehicles);
     } catch (error) {
       console.error('Error getting vehicles at station:', error);
