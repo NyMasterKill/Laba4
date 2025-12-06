@@ -1,6 +1,7 @@
 import express from 'express';
 import { AppDataSource } from './config/typeorm.config';
 import profileRoutes from './routes/profileRoutes';
+import vehicleRoutes from './routes/vehicleRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,6 +11,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api', profileRoutes);
+app.use('/api', vehicleRoutes); // Добавляем маршруты для транспортных средств
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
