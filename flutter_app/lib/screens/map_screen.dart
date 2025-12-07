@@ -3,6 +3,8 @@ import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../config.dart';
 import '../models/vehicle.dart';
 import '../models/station.dart'; // Импортируем модель станции
+import '../widgets/vehicle_card.dart'; // Импортируем новый виджет
+import '../services/cache_service.dart'; // Импортируем CacheService
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -23,29 +25,48 @@ class _MapScreenState extends State<MapScreen> {
   // TODO: 3.3.1: Заменить defaultMarker на иконки из assets/icons/.
   // TODO: 3.3.4: Реализовать кластеризацию для отображения большого количества станций/транспорта.
   // TODO: 3.3.5: Реализовать debounce для запросов при изменении камеры карты.
+  // TODO: 3.4.x: Получить реальную геопозицию пользователя для расчёта расстояния.
+
+  // Фиктивная позиция пользователя. В реальности будет получена через geolocator.
+  final Point _userCurrentPosition = const Point(latitude: 55.7512, longitude: 37.6184);
 
   @override
   void initState() {
     super.initState();
-    // Асинхронно инициализируем объекты на карте
-    WidgetsBinding.instance.addPostFrameCallback((_) => initMapObjects());
+    // Инициализируем кэш
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await CacheService.init(); // Убедимся, что Hive готов
+      await initMapObjects(lat: 55.7512, lng: 37.6184, radius: 1000); // Пример: Москва, радиус 1 км
+    });
   }
 
   // Асинхронный метод инициализации объектов на карте
-  Future<void> initMapObjects() async {
-    // Загружаем транспорт при инициализации экрана
-    await _loadVehicles(55.7512, 37.6184, 1000); // Пример: Москва, радиус 1 км
+  Future<void> initMapObjects({required double lat, required double lng, required double radius}) async {
+    // Попробуем загрузить данные из кэша
+    final cachedVehicles = await CacheService.getVehiclesFromCache();
+
+    if (cachedVehicles != null) {
+      print('Loaded ${cachedVehicles.length} vehicles from cache.');
+      setState(() {
+        _vehicles = cachedVehicles;
+        _mapObjects = _createMapObjects(); // Используем обновлённую версию _createMapObjects
+        _isLoading = false; // Убираем индикатор загрузки, чтобы показать кэшированные данные
+      });
+    } else {
+      print('No valid cache for vehicles found. Keeping loading indicator.');
+    }
+
+    // Загружаем транспорт с API (обновляем кэш)
+    await _loadVehicles(lat, lng, radius);
 
     // Загружаем фиктивные станции (в реальности - вызов API)
     _stations = _getMockStations();
 
-    // Создаём MapObject для транспорта и станций
-    final objects = await _createMapObjects(_vehicles, _stations);
-
-    // Обновляем состояние
+    // Обновляем состояние для новых данных (из API)
+    final objects = await _createMapObjects(); // Используем обновлённую версию _createMapObjects
     setState(() {
       _mapObjects = objects;
-      _isLoading = false; // Скрываем индикатор загрузки
+      _isLoading = false; // Убираем индикатор загрузки после получения новых данных
     });
   }
 
@@ -86,10 +107,15 @@ class _MapScreenState extends State<MapScreen> {
         final List<dynamic> data = json.decode(response.body);
         final vehicles = data.map((json) => Vehicle.fromJson(json)).toList();
 
+        // Обновляем локальное состояние
         setState(() {
           _vehicles = vehicles;
           // _mapObjects обновляется в initMapObjects после загрузки и станций
         });
+
+        // Сохраняем в кэш
+        await CacheService.setVehiclesInCache(vehicles);
+        print('Saved ${vehicles.length} vehicles to cache.');
       } else {
         print('Failed to load vehicles: ${response.statusCode} - ${response.body}');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -111,11 +137,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // Метод для создания MapObject из списков транспорта и станций
-  Future<List<MapObject>> _createMapObjects(List<Vehicle> vehicles, List<Station> stations) async {
+  // Принимает _vehicles и _stations из State, так как они уже обновлены
+  Future<List<MapObject>> _createMapObjects() async {
     List<MapObject> objects = [];
 
     // Создаём значки для транспорта
-    for (Vehicle vehicle in vehicles) {
+    for (Vehicle vehicle in _vehicles) {
       // Используем стандартный маркер. В реальности:
       // final icon = await BitmapDescriptor.fromAssetImage(
       //   ImageConfiguration(devicePixelRatio: 1.0),
@@ -136,7 +163,7 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     // Создаём значки для станций
-    for (Station station in stations) {
+    for (Station station in _stations) {
       // Используем стандартный маркер для станции. В реальности:
       // final icon = await BitmapDescriptor.fromAssetImage(
       //   ImageConfiguration(devicePixelRatio: 1.0),
@@ -162,9 +189,25 @@ class _MapScreenState extends State<MapScreen> {
   // Обработчик нажатия на Placemark
   void _onPlacemarkTap(String type, String id) {
     print('Placemark tapped: Type = $type, ID = $id');
-    // Здесь можно открыть карточку транспорта или станции
-    // Для задачи 3.4 - "Выбор транспорта → открытие карточки"
-    // Этот метод вызовет навигацию или откроет модальное окно
+
+    // Если нажатие на транспорт
+    if (type == 'vehicle') {
+      // Найти объект транспорта по ID
+      final vehicle = _vehicles.firstWhere((v) => v.id == id, orElse: () => throw Exception('Vehicle not found'));
+      // Вычислить расстояние до транспорта от текущей позиции пользователя
+      final distance = calculateDistance(_userCurrentPosition, Point(latitude: vehicle.currentLat, longitude: vehicle.currentLng));
+      // Показать карточку транспорта в модальном окне
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true, // Позволяет карточке растягиваться
+        builder: (BuildContext modalContext) {
+          return VehicleCard(vehicle: vehicle, distanceInMeters: distance.toInt());
+        },
+      );
+    } else if (type == 'station') {
+      // TODO: Реализовать карточку для станции
+      print('Station tapped, ID = $id');
+    }
   }
 
   @override

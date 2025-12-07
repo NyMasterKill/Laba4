@@ -1,12 +1,24 @@
 // lib/models/vehicle.dart
+import 'package:hive/hive.dart';
+part 'vehicle.g.dart'; // Это файл, который будет сгенерирован build_runner
+
+@HiveType(typeId: 1)
 class Vehicle {
+  @HiveField(0)
   final String id;
+  @HiveField(1)
   final String type; // bicycle, scooter
+  @HiveField(2)
   final String model;
+  @HiveField(3)
   final double batteryLevel; // 0-100
+  @HiveField(4)
   final double pricePerMinute;
+  @HiveField(5)
   final double currentLat;
+  @HiveField(6)
   final double currentLng;
+  @HiveField(7)
   final String status; // available, reserved, in_ride, etc.
 
   Vehicle({
