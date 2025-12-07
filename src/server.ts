@@ -6,6 +6,8 @@ import stationRoutes from './routes/stationRoutes';
 import gosuslugiRoutes from './routes/gosuslugiRoutes';
 import authRoutes from './routes/authRoutes';
 import twoFactorAuthRoutes from './routes/twoFactorAuthRoutes';
+import bookingRoutes from './routes/bookingRoutes'; // Импортируем маршруты бронирования
+import { BookingExpirationService } from './services/BookingExpirationService'; // Импорт сервиса
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +26,7 @@ app.use('/api', stationRoutes); // Добавляем маршруты для с
 app.use('/api', gosuslugiRoutes); // Добавляем маршруты для интеграции с Госуслугами
 app.use('/api', authRoutes); // Добавляем маршруты для аутентификации
 app.use('/api', twoFactorAuthRoutes); // Добавляем маршруты для 2FA
+app.use('/api', bookingRoutes); // Добавляем маршруты для бронирования
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
@@ -42,6 +45,9 @@ const startServer = async () => {
     // Initialize database connection
     await AppDataSource.initialize();
     console.log('Data source has been initialized!');
+
+    // Start booking expiration service
+    BookingExpirationService.start();
 
     // Start the server
     app.listen(PORT, () => {
