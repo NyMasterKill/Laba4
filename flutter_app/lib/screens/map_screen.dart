@@ -38,8 +38,16 @@ class _MapScreenState extends State<MapScreen> {
           try {
             await controller.setMapStyle(style: MapStyle.loadStyleString(darkThemeStyle));
           } catch (e) {
-            // Обработка ошибки загрузки стиля (например, если формат не поддерживается)
+            // Обработка ошибки загрузки стиля и уведомление пользователя
             print('Failed to load dark map style: $e');
+            // Используем ScaffoldMessenger для показа сообщения об ошибке
+            // Это позволяет отобразить SnackBar поверх текущего Scaffold
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Ошибка при загрузке темы карты: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
           }
         },
         mapObjects: [],
