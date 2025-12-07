@@ -19,18 +19,30 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Карта'),
       ),
       body: YandexMap(
-        onMapCreated: (YandexMapController yandexMapController) {
+        onMapCreated: (YandexMapController yandexMapController) async {
           controller = yandexMapController;
-          // В будущем сюда можно добавить настройку стиля карты (тёмная тема)
-          // и логику отображения станций и транспорта
+          // Пример настройки тёмной темы карты
+          // Используем JSON-описание стиля для тёмной темы
+          const darkThemeStyle = r'''
+          {
+            "base": {
+              "scheme": "v9dark"
+            },
+            "layers": {
+              "roads": {
+                "style": "simplified"
+              }
+            }
+          }
+          ''';
+          try {
+            await controller.setMapStyle(style: MapStyle.loadStyleString(darkThemeStyle));
+          } catch (e) {
+            // Обработка ошибки загрузки стиля (например, если формат не поддерживается)
+            print('Failed to load dark map style: $e');
+          }
         },
-        // Используем API-ключ из config.dart
-        // Примечание: в реальности ключ может передаваться через нативные файлы (см. AndroidManifest.xml, Info.plist)
-        // или через flutter_config, но для демонстрации инициализации пакета этого достаточно.
-        // Повторюсь, в продакшене хранение ключа в коде НЕБЕЗОПАСНО.
         mapObjects: [],
-        // Устанавливаем начальную позицию (Москва, Красная площадь) и масштаб
-        // Эти значения могут быть заменены на реальное местоположение пользователя позже
         focalPoint: Point(longitude: 37.6184, latitude: 55.7512),
         zoom: 15,
       ),
