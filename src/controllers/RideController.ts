@@ -5,6 +5,7 @@ import { Booking } from '../entities/Booking';
 import { Vehicle } from '../entities/Vehicle';
 import { User } from '../entities/User';
 import { BookingStatus, RideStatus } from '../entities/Booking';
+import { RideTrackingService } from '../services/RideTrackingService';
 
 export class RideController {
   // 5.2. Проверка: есть ли бронь у пользователя, не истёк ли срок
@@ -16,7 +17,7 @@ export class RideController {
       if (!booking_id) {
         return res.status(400).json({ error: 'Booking ID is required' });
       }
-
+      
       if (!user_id) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
@@ -30,17 +31,17 @@ export class RideController {
       });
 
       if (!booking) {
-        return res.status(404).json({
-          error: 'Booking not found',
-          details: 'Booking does not exist or does not belong to the user'
+        return res.status(404).json({ 
+          error: 'Booking not found', 
+          details: 'Booking does not exist or does not belong to the user' 
         });
       }
 
       // Проверка, истекла ли бронь
       const currentTime = new Date();
       if (booking.end_time < currentTime) {
-        return res.status(400).json({
-          error: 'Booking expired',
+        return res.status(400).json({ 
+          error: 'Booking expired', 
           expiry_time: booking.end_time,
           details: 'The booking period has expired'
         });
@@ -48,14 +49,14 @@ export class RideController {
 
       // Проверка статуса брони
       if (booking.status !== BookingStatus.ACTIVE) {
-        return res.status(400).json({
-          error: 'Invalid booking status',
+        return res.status(400).json({ 
+          error: 'Invalid booking status', 
           status: booking.status,
           details: 'Booking is not active'
         });
       }
 
-      // 5.2.3. Логгирование попыток старта без брони
+      // 5.2.3. Логгирование попытов старта без брони
       console.log(`Booking validation successful for user ${user_id}, booking ${booking_id}`);
 
       return res.status(200).json({
@@ -84,7 +85,7 @@ export class RideController {
       if (!booking_id) {
         return res.status(400).json({ error: 'Booking ID is required' });
       }
-
+      
       if (!user_id) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
@@ -97,14 +98,14 @@ export class RideController {
 
       // 5.1.3. Создание записи в rides
       const rideRepository = getRepository(Ride);
-
+      
       const newRide = new Ride();
       newRide.status = RideStatus.IN_PROGRESS;
       newRide.start_time = new Date();
       newRide.user = { id: user_id } as User;
       newRide.vehicle = validationResponse.booking.vehicle as Vehicle;
       newRide.booking = { id: booking_id } as Booking;
-
+      
       // Устанавливаем начальные координаты из транспорта
       if (validationResponse.booking.vehicle && validationResponse.booking.vehicle.current_lat && validationResponse.booking.vehicle.current_lng) {
         newRide.start_lat = validationResponse.booking.vehicle.current_lat;
@@ -116,20 +117,30 @@ export class RideController {
       // 5.3. Обновление vehicle.status = in_ride, скрытие с карты
       const vehicleRepository = getRepository(Vehicle);
       const vehicle = await vehicleRepository.findOne({ where: { id: validationResponse.booking.vehicle_id } });
-
+      
       if (vehicle) {
         // 5.3.1. UPDATE vehicles SET status = 'in_ride'
         vehicle.status = 'in_ride';
         await vehicleRepository.save(vehicle);
-
+        
         // 5.3.2. Скрытие транспорта с карты (публикация события)
         // Это может быть реализовано через WebSocket или SSE, чтобы уведомить клиентов
         // о смене статуса транспорта и необходимости обновить отображение на карте
         console.log(`Vehicle ${vehicle.id} status updated to 'in_ride', now hidden from map`);
-
+        
         // 5.3.3. Отмена активной брони (status = 'used')
         validationResponse.booking.status = BookingStatus.USED;
         await bookingRepository.save(validationResponse.booking);
+      }
+
+      // 5.4. Запуск мониторинга: lat/lng, battery, duration, cost
+      // 5.4.1. Запуск фонового job'а: trackRide(ride_id)
+      try {
+        await RideTrackingService.startTracking(savedRide.id);
+        console.log(`Ride tracking started for ride ${savedRide.id}`);
+      } catch (trackingError) {
+        console.error(`Failed to start tracking for ride ${savedRide.id}:`, trackingError);
+        // Обработка ошибки запуска трекинга, возможно отправка уведомления
       }
 
       return res.status(201).json({
