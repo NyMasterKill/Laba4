@@ -7,6 +7,7 @@ import gosuslugiRoutes from './routes/gosuslugiRoutes';
 import authRoutes from './routes/authRoutes';
 import twoFactorAuthRoutes from './routes/twoFactorAuthRoutes';
 import bookingRoutes from './routes/bookingRoutes'; // Импортируем маршруты бронирования
+import { BookingExpirationService } from './services/BookingExpirationService'; // Импорт сервиса
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,9 @@ const startServer = async () => {
     // Initialize database connection
     await AppDataSource.initialize();
     console.log('Data source has been initialized!');
+
+    // Start booking expiration service
+    BookingExpirationService.start();
 
     // Start the server
     app.listen(PORT, () => {
