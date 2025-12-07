@@ -4,6 +4,9 @@ import { Ride } from '../entities/Ride';
 import { Booking } from '../entities/Booking';
 import { Vehicle } from '../entities/Vehicle';
 import { User } from '../entities/User';
+import { Subscription } from '../entities/Subscription';
+import { TariffPlan } from '../entities/TariffPlan';
+import { Payment, PaymentStatus, PaymentMethod } from '../entities/Payment';
 import { BookingStatus, RideStatus } from '../entities/Booking';
 import { RideTrackingService } from '../services/RideTrackingService';
 
@@ -156,6 +159,91 @@ export class RideController {
     } catch (error) {
       console.error('Error starting ride:', error);
       return res.status(500).json({ error: 'Internal server error' });
+    }
+  };
+
+  // 6.2.1. Логика: базовая ставка + время
+  // 6.2.2. Учёт льгот по подписке (беспл. минуты)
+  static async calculateRideCost = async (rideId: string): Promise<number> => {
+    try {
+      const rideRepository = getRepository(Ride);
+      const userRepository = getRepository(User);
+      const subscriptionRepository = getRepository(Subscription);
+      const tariffPlanRepository = getRepository(TariffPlan);
+      const vehicleRepository = getRepository(Vehicle);
+
+      const ride = await rideRepository.findOne({
+        where: { id: rideId },
+        relations: ['user', 'vehicle']
+      });
+
+      if (!ride || !ride.end_time) {
+        throw new Error('Ride not found or not completed');
+      }
+
+      // Находим транспорт, чтобы получить цену в минуту
+      const vehicle = ride.vehicle || await vehicleRepository.findOne({ where: { id: ride.vehicle_id } });
+      if (!vehicle) {
+        throw new Error('Vehicle not found for ride');
+      }
+
+      // Вычисляем продолжительность поездки в минутах
+      const durationInMinutes = (ride.end_time.getTime() - ride.start_time.getTime()) / (1000 * 60);
+
+      // Проверяем, есть ли у пользователя активная подписка
+      const userSubscriptions = await subscriptionRepository.find({
+        where: {
+          user_id: ride.user_id,
+          status: 'active', // Предполагается, что это значение для активной подписки
+          start_date: () => '<= NOW()',
+          end_date: () => '>= NOW()'
+        },
+        relations: ['tariff_plan']
+      });
+
+      let totalCost = 0;
+      let usedMinutes = durationInMinutes;
+
+      if (userSubscriptions && userSubscriptions.length > 0) {
+        // Пользователь имеет активную подписку
+        const activeSubscription = userSubscriptions[0]; // Предполагаем, что только одна активная подписка
+        const tariffPlan = activeSubscription.tariff_plan;
+
+        // 6.2.2. Учет льгот по подписке (беспл. минуты)
+        const remainingFreeMinutes = Math.max(0, tariffPlan.free_minutes - activeSubscription.used_minutes);
+
+        if (remainingFreeMinutes > 0) {
+          // Сначала используем бесплатные минуты
+          const minutesToDeductFromFree = Math.min(usedMinutes, remainingFreeMinutes);
+          usedMinutes -= minutesToDeductFromFree;
+
+          // Обновляем количество использованных минут в подписке
+          activeSubscription.used_minutes += minutesToDeductFromFree;
+          await subscriptionRepository.save(activeSubscription);
+        }
+
+        // Расчет стоимости за оставшиеся минуты (вне бесплатного лимита)
+        if (usedMinutes > 0) {
+          // Используем цену тарифного плана за минуту
+          // В нашем случае vehicle.price_per_minute - это цена за минуту для транспорта
+          totalCost = usedMinutes * Number(vehicle.price_per_minute);
+        }
+        // Если использованы только бесплатные минуты, то totalCost останется 0
+      } else {
+        // 6.2.1. Логика: базовая ставка + время (без подписки)
+        // Используем цену транспорта за минуту
+        totalCost = durationInMinutes * Number(vehicle.price_per_minute);
+      }
+
+      // 6.2.3. Округление до рубля (по ТЗ)
+      totalCost = Math.ceil(totalCost); // Округление вверх до рубля
+
+      console.log(`Calculated ride cost for ride ${rideId}: ${totalCost} RUB (duration: ${durationInMinutes} min, used free minutes: ${durationInMinutes - usedMinutes})`);
+
+      return totalCost;
+    } catch (error) {
+      console.error(`Error calculating ride cost for ride ${rideId}:`, error);
+      throw error;
     }
   };
 
