@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../config.dart';
 import '../models/vehicle.dart';
+import '../screens/ride_screen.dart';
 import '../services/booking_service.dart'; // Импортируем сервис
+import '../services/auth_service.dart';
 import 'dart:async'; // Для Timer
+import 'dart:convert';
 
 class VehicleCard extends StatefulWidget {
   final Vehicle vehicle;
@@ -21,6 +26,7 @@ class _VehicleCardState extends State<VehicleCard> {
   Timer? _timer;
   Duration? _remainingTime;
   bool _isBookingInProgress = false; // Чтобы кнопка не была активна во время запроса
+  bool _isStartingRide = false; // Чтобы кнопка не была активна во время запроса начала поездки
 
   @override
   void initState() {
@@ -100,6 +106,59 @@ class _VehicleCardState extends State<VehicleCard> {
     }
   }
 
+  // 5.5.4. Начать поездку - открываем RideScreen
+  Future<void> _startRide() async {
+    if (widget.vehicle.status != 'reserved' || _isStartingRide) {
+      return; // Не начинаем поездку, если транспорт не забронирован или идёт запрос
+    }
+
+    setState(() {
+      _isStartingRide = true;
+    });
+
+    // Вызываем API для начала поездки
+    final token = await AuthService().getToken();
+
+    final response = await http.post(
+      Uri.parse('${Config.apiUrl}/rides/start'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'vehicle_id': widget.vehicle.id,
+        // В реальности здесь должен быть booking_id
+      }),
+    );
+
+    if (mounted) { // Проверяем, что виджет всё ещё смонтирован
+      setState(() {
+        _isStartingRide = false;
+      });
+    }
+
+    if (response.statusCode == 201) {
+      // Успешно началась поездка - открываем экран поездки
+      final rideData = jsonDecode(response.body);
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => RideScreen(
+            vehicleId: rideData['ride']['id'],
+            placemarks: [], // Маршрут будет отображаться на экране поездки
+          ),
+        ),
+      );
+    } else {
+      // Обработка ошибки начала поездки
+      final errorData = jsonDecode(response.body);
+      print('Failed to start ride for vehicle ${widget.vehicle.id}: ${errorData['error']}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка при начале поездки: ${errorData['error']}')),
+      );
+    }
+  }
+
   String _formatDuration(Duration duration) {
     if (duration.inSeconds <= 0) return '0:00';
     String twoDigits(int n) => n.toString().padLeft(2, "0");
@@ -112,6 +171,7 @@ class _VehicleCardState extends State<VehicleCard> {
   Widget build(BuildContext context) {
     final bool isBookable = widget.vehicle.status == 'available' &&
         (widget.distanceInMeters == null || widget.distanceInMeters! <= 100);
+    final bool isRideStartable = widget.vehicle.status == 'reserved' && _remainingTime != null; // Можно начать поездку, если транспорт забронирован
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -185,17 +245,29 @@ class _VehicleCardState extends State<VehicleCard> {
               ],
             ),
           const SizedBox(height: 8),
-          // Кнопка "Забронировать"
-          ElevatedButton(
-            onPressed: isBookable && !_isBookingInProgress
-                ? _bookVehicle // Вызываем наш метод
-                : null, // Если isBookable = false или _isBookingInProgress = true, кнопка disabled
-            style: ElevatedButton.styleFrom(
-              backgroundColor: (isBookable && !_isBookingInProgress) ? Theme.of(context).primaryColor : Colors.grey,
-              foregroundColor: Colors.white,
+          // Кнопки для управления транспортом
+          if (isBookable && !_isBookingInProgress)
+            ElevatedButton(
+              onPressed: _bookVehicle, // Вызываем наш метод
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: _isBookingInProgress
+                  ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white,)
+                  : const Text('Забронировать'), // Показываем индикатор загрузки
+            )
+          else if (isRideStartable)
+            ElevatedButton(
+              onPressed: !_isStartingRide ? _startRide : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: !_isStartingRide ? Colors.green : Colors.grey,
+                foregroundColor: Colors.white,
+              ),
+              child: _isStartingRide
+                  ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white,)
+                  : const Text('Начать поездку'),
             ),
-            child: _isBookingInProgress ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white,) : const Text('Забронировать'), // Показываем индикатор загрузки
-          ),
         ],
       ),
     );
