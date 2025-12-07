@@ -13,7 +13,8 @@ export class VehicleService {
     status?: string,
     lat?: number,
     lng?: number,
-    radius?: number
+    radius?: number,
+    type?: string // Добавлен параметр для фильтрации по типу
   ): Promise<Vehicle[]> {
     let query = this.vehicleRepository.createQueryBuilder('vehicle')
       .leftJoinAndSelect('vehicle.station', 'station')
@@ -25,6 +26,11 @@ export class VehicleService {
     } else {
       // По умолчанию ищем доступные транспортные средства
       query = query.andWhere('vehicle.status = :status', { status: 'available' });
+    }
+
+    // Фильтрация по типу (велосипед, самокат)
+    if (type) {
+      query = query.andWhere('vehicle.type = :type', { type });
     }
 
     // Фильтрация по местоположению, если координаты и радиус указаны
@@ -44,6 +50,9 @@ export class VehicleService {
         { lat, lng, radius }
       );
     }
+
+    // Ограничение на количество возвращаемых объектов (задача 3.2.4)
+    query = query.limit(50);
 
     return await query.getMany();
   }
