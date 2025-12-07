@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/vehicle.dart';
+import '../services/booking_service.dart'; // Импортируем сервис
+import 'dart:async'; // Для Timer
 
-class VehicleCard extends StatelessWidget {
+class VehicleCard extends StatefulWidget {
   final Vehicle vehicle;
   final int? distanceInMeters; // Опциональное расстояние до транспорта
 
@@ -12,11 +14,104 @@ class VehicleCard extends StatelessWidget {
   });
 
   @override
+  State<VehicleCard> createState() => _VehicleCardState();
+}
+
+class _VehicleCardState extends State<VehicleCard> {
+  Timer? _timer;
+  Duration? _remainingTime;
+  bool _isBookingInProgress = false; // Чтобы кнопка не была активна во время запроса
+
+  @override
+  void initState() {
+    super.initState();
+    _updateStateForVehicleStatus();
+  }
+
+  @override
+  void didUpdateWidget(VehicleCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.vehicle.status != widget.vehicle.status) {
+      _stopTimer();
+      _updateStateForVehicleStatus();
+    }
+  }
+
+  void _updateStateForVehicleStatus() {
+    setState(() {
+      if (widget.vehicle.status == 'reserved') {
+        // ПОКА ЗАГЛУШКА: таймер на 15 минут с момента резервации
+        // В реальности, нужно будет использовать end_time из объекта Booking.
+        _startCountdownTimer(const Duration(minutes: 15));
+      } else {
+        _stopTimer();
+        _remainingTime = null;
+      }
+    });
+  }
+
+  void _startCountdownTimer(Duration duration) {
+    _remainingTime = duration;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_remainingTime != null && _remainingTime!.inSeconds > 0) {
+          _remainingTime = Duration(seconds: _remainingTime!.inSeconds - 1);
+        } else {
+          _remainingTime = null;
+          _stopTimer();
+          // Сигнализировать, что время вышло?
+          // Карта сама обновится при обновлении vehicle.status из MapScreen.
+        }
+      });
+    });
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  Future<void> _bookVehicle() async {
+    if (widget.vehicle.status != 'available' || _isBookingInProgress) {
+      return; // Не бронируем, если уже не доступен или идёт запрос
+    }
+
+    setState(() {
+      _isBookingInProgress = true;
+    });
+
+    final bookingResult = await BookingService.createBooking(widget.vehicle.id);
+
+    if (mounted) { // Проверяем, что виджет всё ещё смонтирован
+      setState(() {
+        _isBookingInProgress = false;
+      });
+    }
+
+    if (bookingResult != null) {
+      // Успешно забронировано. Видеокарта обновится через родителя (MapScreen) при изменении vehicle.status.
+      print('Vehicle ${widget.vehicle.id} booked successfully!');
+    } else {
+      // Обработка ошибки. Можно показать SnackBar.
+      print('Failed to book vehicle ${widget.vehicle.id}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка при бронировании транспорта')),
+      );
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inSeconds <= 0) return '0:00';
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return "${duration.inMinutes}:$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Логика для определения, доступна ли кнопка "Забронировать"
-    // Пока: кнопка disabled, если статус не 'available' или distance > 100
-    final bool isBookable = vehicle.status == 'available' &&
-        (distanceInMeters == null || distanceInMeters! <= 100);
+    final bool isBookable = widget.vehicle.status == 'available' &&
+        (widget.distanceInMeters == null || widget.distanceInMeters! <= 100);
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -27,11 +122,11 @@ class VehicleCard extends StatelessWidget {
           // Тип и модель
           Row(
             children: [
-              Icon(vehicle.type == 'scooter' ? Icons.electrical_services : Icons.pedal_bike_outlined),
+              Icon(widget.vehicle.type == 'scooter' ? Icons.electrical_services : Icons.pedal_bike_outlined),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${vehicle.type == 'scooter' ? 'Самокат' : 'Велосипед'} ${vehicle.model}',
+                  '${widget.vehicle.type == 'scooter' ? 'Самокат' : 'Велосипед'} ${widget.vehicle.model}',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -43,15 +138,15 @@ class VehicleCard extends StatelessWidget {
             children: [
               const Icon(Icons.battery_full),
               const SizedBox(width: 8),
-              Text('Заряд: ${vehicle.batteryLevel.toInt()}%'),
+              Text('Заряд: ${widget.vehicle.batteryLevel.toInt()}%'),
               const SizedBox(width: 16),
               // Прогресс-бар для заряда
               Expanded(
                 child: LinearProgressIndicator(
-                  value: vehicle.batteryLevel / 100,
+                  value: widget.vehicle.batteryLevel / 100,
                   backgroundColor: Colors.grey[300],
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    vehicle.batteryLevel > 50 ? Colors.green : (vehicle.batteryLevel > 20 ? Colors.orange : Colors.red),
+                    widget.vehicle.batteryLevel > 50 ? Colors.green : (widget.vehicle.batteryLevel > 20 ? Colors.orange : Colors.red),
                   ),
                 ),
               ),
@@ -63,36 +158,52 @@ class VehicleCard extends StatelessWidget {
             children: [
               const Icon(Icons.monetization_on),
               const SizedBox(width: 8),
-              Text('Цена: ${vehicle.pricePerMinute.toStringAsFixed(2)} \$/мин'),
+              Text('Цена: ${widget.vehicle.pricePerMinute.toStringAsFixed(2)} \$/мин'),
             ],
           ),
           const SizedBox(height: 8),
           // Расстояние
-          if (distanceInMeters != null)
+          if (widget.distanceInMeters != null)
             Row(
               children: [
                 const Icon(Icons.navigation),
                 const SizedBox(width: 8),
-                Text('Расстояние: ${distanceInMeters!} м'),
+                Text('Расстояние: ${widget.distanceInMeters!} м'),
               ],
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8), // Добавим отступ под таймер
+          // Таймер, если статус reserved
+          if (widget.vehicle.status == 'reserved' && _remainingTime != null)
+            Row(
+              children: [
+                Icon(Icons.timer, color: Colors.orange,),
+                const SizedBox(width: 8),
+                Text(
+                  'Бронь истекает: ${_formatDuration(_remainingTime!)}',
+                  style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          const SizedBox(height: 8),
           // Кнопка "Забронировать"
           ElevatedButton(
-            onPressed: isBookable
-                ? () {
-                    // TODO: Реализовать логику бронирования при нажатии
-                    print('Попытка забронировать транспорт: ${vehicle.id}');
-                  }
-                : null, // Если isBookable = false, кнопка disabled
+            onPressed: isBookable && !_isBookingInProgress
+                ? _bookVehicle // Вызываем наш метод
+                : null, // Если isBookable = false или _isBookingInProgress = true, кнопка disabled
             style: ElevatedButton.styleFrom(
-              backgroundColor: isBookable ? Theme.of(context).primaryColor : Colors.grey,
+              backgroundColor: (isBookable && !_isBookingInProgress) ? Theme.of(context).primaryColor : Colors.grey,
               foregroundColor: Colors.white,
             ),
-            child: Text('Забронировать'),
+            child: _isBookingInProgress ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white,) : const Text('Забронировать'), // Показываем индикатор загрузки
           ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _stopTimer(); // Важно остановить таймер при удалении виджета
+    super.dispose();
   }
 }
