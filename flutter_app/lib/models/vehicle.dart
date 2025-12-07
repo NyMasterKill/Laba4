@@ -44,4 +44,26 @@ class Vehicle {
       status: json['status'] as String? ?? 'unknown',
     );
   }
+
+  Vehicle copyWith({
+    String? id,
+    String? type,
+    String? model,
+    double? batteryLevel,
+    double? pricePerMinute,
+    double? currentLat,
+    double? currentLng,
+    String? status,
+  }) {
+    return Vehicle(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      model: model ?? this.model,
+      batteryLevel: batteryLevel ?? this.batteryLevel,
+      pricePerMinute: pricePerMinute ?? this.pricePerMinute,
+      currentLat: currentLat ?? this.currentLat,
+      currentLng: currentLng ?? this.currentLng,
+      status: status ?? this.status,
+    );
+  }
 }
