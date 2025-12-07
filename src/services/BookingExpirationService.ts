@@ -28,7 +28,7 @@ export class BookingExpirationService {
           status: BookingStatus.ACTIVE,
           end_time: LessThanOrEqual(now),
         },
-        relations: ['vehicle', 'rides'], // Загружаем транспорт и поездки
+        relations: ['vehicle', 'rides', 'user'], // Загружаем транспорт, поездки и пользователя
       });
 
       for (const booking of expiredBookings) {
@@ -51,9 +51,14 @@ export class BookingExpirationService {
         const vehicle = booking.vehicle;
         vehicle.status = 'available';
 
+        // Обновляем last_booking_ended_at у пользователя
+        const user = booking.user;
+        user.last_booking_ended_at = new Date();
+
         // Сохраняем изменения
         await queryRunner.manager.save(booking);
         await queryRunner.manager.save(vehicle);
+        await queryRunner.manager.save(user); // Сохраняем обновлённого пользователя
       }
 
       await queryRunner.commitTransaction();

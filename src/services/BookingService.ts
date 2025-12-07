@@ -3,7 +3,7 @@ import { Booking, BookingStatus } from '../entities/Booking';
 import { User } from '../entities/User';
 import { Vehicle } from '../entities/Vehicle';
 import { AppDataSource } from '../config/typeorm.config';
-import { BadRequestError, NotFoundError } from 'routing-controllers';
+import { BadRequestError, ConflictError, NotFoundError } from 'routing-controllers';
 
 export class BookingService {
   private bookingRepository: Repository<Booking>;
@@ -24,6 +24,15 @@ export class BookingService {
 
     if (!user) {
       throw new NotFoundError('User not found');
+    }
+
+    // Проверка кулдауна (5 минут)
+    if (user.last_booking_ended_at) {
+      const fiveMinutesAgo = new Date();
+      fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+      if (user.last_booking_ended_at > fiveMinutesAgo) {
+        throw new ConflictError('Please wait for the cooldown period to end.');
+      }
     }
 
     // 2. Найти транспорт

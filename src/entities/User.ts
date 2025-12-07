@@ -32,6 +32,9 @@ export class User {
   @Column({ type: 'boolean', default: false })
   is_active: boolean;
 
+  @Column({ type: 'timestamptz', nullable: true }) // Добавляем новое поле
+  last_booking_ended_at?: Date;
+
   @CreateDateColumn()
   created_at: Date;
 
