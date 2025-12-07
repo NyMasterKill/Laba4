@@ -6,6 +6,7 @@ import stationRoutes from './routes/stationRoutes';
 import gosuslugiRoutes from './routes/gosuslugiRoutes';
 import authRoutes from './routes/authRoutes';
 import twoFactorAuthRoutes from './routes/twoFactorAuthRoutes';
+import bookingRoutes from './routes/bookingRoutes'; // Импортируем маршруты бронирования
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +25,7 @@ app.use('/api', stationRoutes); // Добавляем маршруты для с
 app.use('/api', gosuslugiRoutes); // Добавляем маршруты для интеграции с Госуслугами
 app.use('/api', authRoutes); // Добавляем маршруты для аутентификации
 app.use('/api', twoFactorAuthRoutes); // Добавляем маршруты для 2FA
+app.use('/api', bookingRoutes); // Добавляем маршруты для бронирования
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
