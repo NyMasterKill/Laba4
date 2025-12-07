@@ -16,7 +16,7 @@ export class RideController {
       if (!booking_id) {
         return res.status(400).json({ error: 'Booking ID is required' });
       }
-      
+
       if (!user_id) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
@@ -30,17 +30,17 @@ export class RideController {
       });
 
       if (!booking) {
-        return res.status(404).json({ 
-          error: 'Booking not found', 
-          details: 'Booking does not exist or does not belong to the user' 
+        return res.status(404).json({
+          error: 'Booking not found',
+          details: 'Booking does not exist or does not belong to the user'
         });
       }
 
       // Проверка, истекла ли бронь
       const currentTime = new Date();
       if (booking.end_time < currentTime) {
-        return res.status(400).json({ 
-          error: 'Booking expired', 
+        return res.status(400).json({
+          error: 'Booking expired',
           expiry_time: booking.end_time,
           details: 'The booking period has expired'
         });
@@ -48,8 +48,8 @@ export class RideController {
 
       // Проверка статуса брони
       if (booking.status !== BookingStatus.ACTIVE) {
-        return res.status(400).json({ 
-          error: 'Invalid booking status', 
+        return res.status(400).json({
+          error: 'Invalid booking status',
           status: booking.status,
           details: 'Booking is not active'
         });
@@ -84,7 +84,7 @@ export class RideController {
       if (!booking_id) {
         return res.status(400).json({ error: 'Booking ID is required' });
       }
-      
+
       if (!user_id) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
@@ -97,14 +97,14 @@ export class RideController {
 
       // 5.1.3. Создание записи в rides
       const rideRepository = getRepository(Ride);
-      
+
       const newRide = new Ride();
       newRide.status = RideStatus.IN_PROGRESS;
       newRide.start_time = new Date();
       newRide.user = { id: user_id } as User;
       newRide.vehicle = validationResponse.booking.vehicle as Vehicle;
       newRide.booking = { id: booking_id } as Booking;
-      
+
       // Устанавливаем начальные координаты из транспорта
       if (validationResponse.booking.vehicle && validationResponse.booking.vehicle.current_lat && validationResponse.booking.vehicle.current_lng) {
         newRide.start_lat = validationResponse.booking.vehicle.current_lat;
@@ -116,11 +116,17 @@ export class RideController {
       // 5.3. Обновление vehicle.status = in_ride, скрытие с карты
       const vehicleRepository = getRepository(Vehicle);
       const vehicle = await vehicleRepository.findOne({ where: { id: validationResponse.booking.vehicle_id } });
-      
+
       if (vehicle) {
+        // 5.3.1. UPDATE vehicles SET status = 'in_ride'
         vehicle.status = 'in_ride';
         await vehicleRepository.save(vehicle);
-        
+
+        // 5.3.2. Скрытие транспорта с карты (публикация события)
+        // Это может быть реализовано через WebSocket или SSE, чтобы уведомить клиентов
+        // о смене статуса транспорта и необходимости обновить отображение на карте
+        console.log(`Vehicle ${vehicle.id} status updated to 'in_ride', now hidden from map`);
+
         // 5.3.3. Отмена активной брони (status = 'used')
         validationResponse.booking.status = BookingStatus.USED;
         await bookingRepository.save(validationResponse.booking);
@@ -139,6 +145,34 @@ export class RideController {
     } catch (error) {
       console.error('Error starting ride:', error);
       return res.status(500).json({ error: 'Internal server error' });
+    }
+  };
+
+  // Метод для обновления статуса транспорта
+  // 5.3.1. UPDATE vehicles SET status = 'in_ride'
+  static async updateVehicleStatus = async (vehicle_id: string, new_status: string): Promise<boolean> => {
+    try {
+      const vehicleRepository = getRepository(Vehicle);
+      const vehicle = await vehicleRepository.findOne({ where: { id: vehicle_id } });
+
+      if (!vehicle) {
+        console.error(`Vehicle with id ${vehicle_id} not found`);
+        return false;
+      }
+
+      // Сохраняем старый статус для логирования
+      const old_status = vehicle.status;
+      vehicle.status = new_status as any; // Приведение к типу, т.к. статус может быть разным
+
+      await vehicleRepository.save(vehicle);
+
+      // 5.3.2. Скрытие транспорта с карты (публикация события)
+      console.log(`Vehicle ${vehicle_id} status updated from '${old_status}' to '${new_status}'`);
+
+      return true;
+    } catch (error) {
+      console.error(`Error updating vehicle status for vehicle ${vehicle_id}:`, error);
+      return false;
     }
   };
 
