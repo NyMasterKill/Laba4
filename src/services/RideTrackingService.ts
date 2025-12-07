@@ -50,8 +50,8 @@ export class RideTrackingService {
       // Пока что используем координаты из транспорта
       if (ride.vehicle) {
         // Получаем обновленные данные транспорта
-        const updatedVehicle = await vehicleRepository.findOne({ 
-          where: { id: ride.vehicle.id } 
+        const updatedVehicle = await vehicleRepository.findOne({
+          where: { id: ride.vehicle.id }
         });
 
         if (updatedVehicle) {
@@ -63,7 +63,7 @@ export class RideTrackingService {
           ride.current_lat = updatedVehicle.current_lat;
           ride.current_lng = updatedVehicle.current_lng;
           ride.total_cost = calculatedCost;
-          
+
           // Обновляем уровень заряда батареи
           ride.current_battery_level = updatedVehicle.battery_level;
 
@@ -101,7 +101,10 @@ export class RideTrackingService {
   static async finishRide(rideId: string): Promise<boolean> {
     try {
       const rideRepository = getRepository(Ride);
-      const ride = await rideRepository.findOne({ where: { id: rideId } });
+      const ride = await rideRepository.findOne({
+        where: { id: rideId },
+        relations: ['user', 'vehicle']
+      });
 
       if (!ride) {
         console.error(`Ride with id ${rideId} not found`);
@@ -111,7 +114,13 @@ export class RideTrackingService {
       // Устанавливаем статус завершения и время окончания
       ride.status = RideStatus.COMPLETED;
       ride.end_time = new Date();
-      
+
+      // 6.2.3. Округление до рубля (по ТЗ)
+      // Расчет финальной стоимости поездки
+      const RideController = await import('../controllers/RideController').then(m => m.RideController);
+      const finalCost = await RideController.calculateRideCost(rideId);
+      ride.total_cost = finalCost;
+
       await rideRepository.save(ride);
 
       // Останавливаем трекинг

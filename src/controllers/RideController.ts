@@ -4,6 +4,9 @@ import { Ride } from '../entities/Ride';
 import { Booking } from '../entities/Booking';
 import { Vehicle } from '../entities/Vehicle';
 import { User } from '../entities/User';
+import { Subscription, SubscriptionStatus } from '../entities/Subscription';
+import { TariffPlan } from '../entities/TariffPlan';
+import { Payment, PaymentStatus, PaymentMethod } from '../entities/Payment';
 import { BookingStatus, RideStatus } from '../entities/Booking';
 import { RideTrackingService } from '../services/RideTrackingService';
 
@@ -17,7 +20,7 @@ export class RideController {
       if (!booking_id) {
         return res.status(400).json({ error: 'Booking ID is required' });
       }
-      
+
       if (!user_id) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
@@ -31,17 +34,17 @@ export class RideController {
       });
 
       if (!booking) {
-        return res.status(404).json({ 
-          error: 'Booking not found', 
-          details: 'Booking does not exist or does not belong to the user' 
+        return res.status(404).json({
+          error: 'Booking not found',
+          details: 'Booking does not exist or does not belong to the user'
         });
       }
 
       // Проверка, истекла ли бронь
       const currentTime = new Date();
       if (booking.end_time < currentTime) {
-        return res.status(400).json({ 
-          error: 'Booking expired', 
+        return res.status(400).json({
+          error: 'Booking expired',
           expiry_time: booking.end_time,
           details: 'The booking period has expired'
         });
@@ -49,8 +52,8 @@ export class RideController {
 
       // Проверка статуса брони
       if (booking.status !== BookingStatus.ACTIVE) {
-        return res.status(400).json({ 
-          error: 'Invalid booking status', 
+        return res.status(400).json({
+          error: 'Invalid booking status',
           status: booking.status,
           details: 'Booking is not active'
         });
@@ -85,27 +88,36 @@ export class RideController {
       if (!booking_id) {
         return res.status(400).json({ error: 'Booking ID is required' });
       }
-      
+
       if (!user_id) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      // Валидация брони через отдельный метод для лучшей структуры
+      // 5.1.2. Проверка: бронь активна и не истекла
       const validationResponse = await RideController.validateBookingForRide(booking_id, user_id);
       if (!validationResponse.isValid) {
         return res.status(validationResponse.statusCode).json({ error: validationResponse.message });
       }
 
+      // 6.3. Проверка подписки перед стартом поездки
+      const subscriptionCheck = await RideController.checkUserSubscription(user_id);
+      if (!subscriptionCheck.isEligible) {
+        return res.status(403).json({
+          error: 'User does not have an active subscription or has exceeded free minute limit',
+          details: subscriptionCheck.details
+        });
+      }
+
       // 5.1.3. Создание записи в rides
       const rideRepository = getRepository(Ride);
-      
+
       const newRide = new Ride();
       newRide.status = RideStatus.IN_PROGRESS;
       newRide.start_time = new Date();
       newRide.user = { id: user_id } as User;
       newRide.vehicle = validationResponse.booking.vehicle as Vehicle;
       newRide.booking = { id: booking_id } as Booking;
-      
+
       // Устанавливаем начальные координаты из транспорта
       if (validationResponse.booking.vehicle && validationResponse.booking.vehicle.current_lat && validationResponse.booking.vehicle.current_lng) {
         newRide.start_lat = validationResponse.booking.vehicle.current_lat;
@@ -117,17 +129,17 @@ export class RideController {
       // 5.3. Обновление vehicle.status = in_ride, скрытие с карты
       const vehicleRepository = getRepository(Vehicle);
       const vehicle = await vehicleRepository.findOne({ where: { id: validationResponse.booking.vehicle_id } });
-      
+
       if (vehicle) {
         // 5.3.1. UPDATE vehicles SET status = 'in_ride'
         vehicle.status = 'in_ride';
         await vehicleRepository.save(vehicle);
-        
+
         // 5.3.2. Скрытие транспорта с карты (публикация события)
         // Это может быть реализовано через WebSocket или SSE, чтобы уведомить клиентов
         // о смене статуса транспорта и необходимости обновить отображение на карте
         console.log(`Vehicle ${vehicle.id} status updated to 'in_ride', now hidden from map`);
-        
+
         // 5.3.3. Отмена активной брони (status = 'used')
         validationResponse.booking.status = BookingStatus.USED;
         await bookingRepository.save(validationResponse.booking);
@@ -151,6 +163,11 @@ export class RideController {
           start_time: savedRide.start_time,
           vehicle_id: savedRide.vehicle.id,
           booking_id: savedRide.booking.id
+        },
+        subscription_info: {
+          has_subscription: subscriptionCheck.hasSubscription,
+          free_minutes_used: subscriptionCheck.usedMinutes,
+          free_minutes_remaining: subscriptionCheck.remainingMinutes
         }
       });
     } catch (error) {
@@ -158,6 +175,147 @@ export class RideController {
       return res.status(500).json({ error: 'Internal server error' });
     }
   };
+
+  // 6.2.1. Логика: базовая ставка + время
+  // 6.2.2. Учёт льгот по подписке (беспл. минуты)
+  static async calculateRideCost = async (rideId: string): Promise<number> => {
+    try {
+      const rideRepository = getRepository(Ride);
+      const userRepository = getRepository(User);
+      const subscriptionRepository = getRepository(Subscription);
+      const tariffPlanRepository = getRepository(TariffPlan);
+      const vehicleRepository = getRepository(Vehicle);
+
+      const ride = await rideRepository.findOne({
+        where: { id: rideId },
+        relations: ['user', 'vehicle']
+      });
+
+      if (!ride || !ride.end_time) {
+        throw new Error('Ride not found or not completed');
+      }
+
+      // Находим транспорт, чтобы получить цену в минуту
+      const vehicle = ride.vehicle || await vehicleRepository.findOne({ where: { id: ride.vehicle_id } });
+      if (!vehicle) {
+        throw new Error('Vehicle not found for ride');
+      }
+
+      // Вычисляем продолжительность поездки в минутах
+      const durationInMinutes = (ride.end_time.getTime() - ride.start_time.getTime()) / (1000 * 60);
+
+      // Проверяем, есть ли у пользователя активная подписка
+      const userSubscriptions = await subscriptionRepository.find({
+        where: {
+          user_id: ride.user_id,
+          status: 'active', // Предполагается, что это значение для активной подписки
+          start_date: () => '<= NOW()',
+          end_date: () => '>= NOW()'
+        },
+        relations: ['tariff_plan']
+      });
+
+      let totalCost = 0;
+      let usedMinutes = durationInMinutes;
+
+      if (userSubscriptions && userSubscriptions.length > 0) {
+        // Пользователь имеет активную подписку
+        const activeSubscription = userSubscriptions[0]; // Предполагаем, что только одна активная подписка
+        const tariffPlan = activeSubscription.tariff_plan;
+
+        // 6.2.2. Учет льгот по подписке (беспл. минуты)
+        const remainingFreeMinutes = Math.max(0, tariffPlan.free_minutes - activeSubscription.used_minutes);
+
+        if (remainingFreeMinutes > 0) {
+          // Сначала используем бесплатные минуты
+          const minutesToDeductFromFree = Math.min(usedMinutes, remainingFreeMinutes);
+          usedMinutes -= minutesToDeductFromFree;
+
+          // Обновляем количество использованных минут в подписке
+          activeSubscription.used_minutes += minutesToDeductFromFree;
+          await subscriptionRepository.save(activeSubscription);
+        }
+
+        // Расчет стоимости за оставшиеся минуты (вне бесплатного лимита)
+        if (usedMinutes > 0) {
+          // Используем цену тарифного плана за минуту
+          // В нашем случае vehicle.price_per_minute - это цена за минуту для транспорта
+          totalCost = usedMinutes * Number(vehicle.price_per_minute);
+        }
+        // Если использованы только бесплатные минуты, то totalCost останется 0
+      } else {
+        // 6.2.1. Логика: базовая ставка + время (без подписки)
+        // Используем цену транспорта за минуту
+        totalCost = durationInMinutes * Number(vehicle.price_per_minute);
+      }
+
+      // 6.2.3. Округление до рубля (по ТЗ)
+      totalCost = Math.ceil(totalCost); // Округление вверх до рубля
+
+      console.log(`Calculated ride cost for ride ${rideId}: ${totalCost} RUB (duration: ${durationInMinutes} min, used free minutes: ${durationInMinutes - usedMinutes})`);
+
+      return totalCost;
+    } catch (error) {
+      console.error(`Error calculating ride cost for ride ${rideId}:`, error);
+      throw error;
+    }
+  };
+
+  // 6.3.1. SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active'
+  // 6.3.2. Проверка остатка бесплатных минут
+  // 6.3.3. Обновление used_minutes += duration
+  static async checkUserSubscription(userId: string) {
+    try {
+      const subscriptionRepository = getRepository(Subscription);
+
+      // Ищем активные подписки пользователя
+      const activeSubscriptions = await subscriptionRepository.find({
+        where: {
+          user_id: userId,
+          status: SubscriptionStatus.ACTIVE,
+          start_date: () => '<= NOW()',
+          end_date: () => '>= NOW()',
+        },
+        relations: ['tariff_plan']
+      });
+
+      if (activeSubscriptions.length === 0) {
+        // Пользователь не имеет активных подписок
+        return {
+          isEligible: true, // разрешаем поездку, но без льгот
+          hasSubscription: false,
+          usedMinutes: 0,
+          remainingMinutes: 0,
+          details: 'No active subscription - ride will be charged at standard rate'
+        };
+      }
+
+      // Используем первую активную подписку (предполагаем, что у пользователя только одна активная подписка)
+      const subscription = activeSubscriptions[0];
+      const tariffPlan = subscription.tariff_plan;
+
+      // Проверяем, есть ли еще доступные бесплатные минуты
+      const remainingFreeMinutes = Math.max(0, tariffPlan.free_minutes - subscription.used_minutes);
+
+      // 6.3.2. Проверка остатка бесплатных минут
+      return {
+        isEligible: true, // пользователь может начать поездку
+        hasSubscription: true,
+        usedMinutes: subscription.used_minutes,
+        remainingMinutes: remainingFreeMinutes,
+        details: `Active subscription with ${remainingFreeMinutes} free minutes remaining`
+      };
+    } catch (error) {
+      console.error(`Error checking user subscription for user ${userId}:`, error);
+      return {
+        isEligible: false,
+        hasSubscription: false,
+        usedMinutes: 0,
+        remainingMinutes: 0,
+        details: 'Error checking subscription status'
+      };
+    }
+  }
 
   // Метод для обновления статуса транспорта
   // 5.3.1. UPDATE vehicles SET status = 'in_ride'

@@ -8,6 +8,8 @@ import authRoutes from './routes/authRoutes';
 import twoFactorAuthRoutes from './routes/twoFactorAuthRoutes';
 import bookingRoutes from './routes/bookingRoutes'; // Импортируем маршруты бронирования
 import rideRoutes from './routes/ride'; // Импортируем маршруты поездок
+import paymentRoutes from './routes/payment'; // Импортируем маршруты оплаты
+import tariffSubscriptionRoutes from './routes/tariffSubscription'; // Импортируем маршруты тарифов и подписок
 import { BookingExpirationService } from './services/BookingExpirationService'; // Импорт сервиса
 
 const app = express();
@@ -29,6 +31,8 @@ app.use('/api', authRoutes); // Добавляем маршруты для ау�
 app.use('/api', twoFactorAuthRoutes); // Добавляем маршруты для 2FA
 app.use('/api', bookingRoutes); // Добавляем маршруты для бронирования
 app.use('/api', rideRoutes); // Добавляем маршруты для поездок
+app.use('/api', paymentRoutes); // Добавляем маршруты для оплаты
+app.use('/api', tariffSubscriptionRoutes); // Добавляем маршруты для тарифов и подписок
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
