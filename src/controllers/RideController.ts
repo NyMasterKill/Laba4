@@ -95,6 +95,32 @@ export class RideController {
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
+      // 7.4.1. Реализовать middleware: checkUnpaidFines(user_id)
+      // Проверяем, есть ли у пользователя неоплаченные штрафы
+      const hasUnpaidFines = await RideController.hasUnpaidFines(user_id);
+      if (hasUnpaidFines) {
+        // 7.4.2. Возврат 403 Forbidden при наличии штрафов
+        const fineRepository = getRepository(Fine);
+        const unpaidFine = await fineRepository.findOne({
+          where: {
+            user_id: user_id,
+            status: FineStatus.PENDING
+          }
+        });
+
+        return res.status(403).json({
+          error: 'User has unpaid fines',
+          details: 'Cannot start a new ride until fines are paid',
+          unpaid_fine: {
+            id: unpaidFine?.id,
+            type: unpaidFine?.type,
+            amount: unpaidFine?.amount,
+            description: unpaidFine?.description,
+            due_date: unpaidFine?.due_date
+          }
+        });
+      }
+
       // 5.1.2. Проверка: бронь активна и не истекла
       const validationResponse = await RideController.validateBookingForRide(booking_id, user_id);
       if (!validationResponse.isValid) {
