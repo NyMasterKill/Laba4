@@ -69,11 +69,18 @@ class _RoleBasedHomeState extends State<RoleBasedHome> {
 
 class AppProvider extends ChangeNotifier {
   int _selectedIndex = 0;
+  bool _isTechStaff = false; // по умолчанию - обычный пользователь
 
   int get selectedIndex => _selectedIndex;
+  bool get isTechStaff => _isTechStaff;
 
   void updateIndex(int index) {
     _selectedIndex = index;
+    notifyListeners();
+  }
+
+  void updateTechStaffStatus(bool isTechStaff) {
+    _isTechStaff = isTechStaff;
     notifyListeners();
   }
 }
