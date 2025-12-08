@@ -9,6 +9,7 @@ import { TariffPlan } from '../entities/TariffPlan';
 import { Payment, PaymentStatus, PaymentMethod } from '../entities/Payment';
 import { BookingStatus, RideStatus } from '../entities/Booking';
 import { Station } from '../entities/Station';
+import { Fine, FineStatus, FineType } from '../entities/Fine';
 import { RideTrackingService } from '../services/RideTrackingService';
 
 export class RideController {
@@ -619,10 +620,23 @@ export class RideController {
         }
       };
 
-      // Если обнаружено нарушение (не вернулся на станцию), добавим информацию о нарушении
+      // Если обнаружено нарушение (не вернулся на станцию), начисляем штраф
       if (!isWithinStationRadius) {
-        response.violation_details = violationDetails;
-        response.return_to_station_required = false;
+        try {
+          // 7.3.3. Реализовать создание записи в fines
+          const fine = await RideController.createFineForRideViolation(ride.user.id, ride.id, violationDetails);
+          console.log(`Fine created for user ${ride.user.id} for ride violation: ${fine.id}`);
+
+          response.violation_details = violationDetails;
+          response.fine_issued = true;
+          response.fine_id = fine.id;
+          response.fine_amount = fine.amount;
+        } catch (fineError) {
+          console.error('Error creating fine for ride violation:', fineError);
+          // Не прерываем выполнение, если не удалось создать штраф
+          response.violation_details = violationDetails;
+          response.fine_creation_error = 'Could not create fine for violation';
+        }
       } else {
         response.return_to_station_verified = true;
       }
@@ -633,4 +647,100 @@ export class RideController {
       return res.status(500).json({ error: 'Internal server error' });
     }
   };
+
+  // 7.3.1. Создать модель fines: type, amount, status
+  // 7.3.2. Реализовать логику штрафов: не на станции, повреждения
+  // 7.3.3. Реализовать создание записи в fines
+  static async createFineForRideViolation(userId: string, rideId: string, violationDescription: string): Promise<Fine> {
+    try {
+      const fineRepository = getRepository(Fine);
+
+      // Создаем штраф за нарушение возврата на станцию
+      const fine = new Fine();
+      fine.type = FineType.STATION_RETURN_VIOLATION; // 7.3.2. Логика штрафов: не на станции
+      fine.amount = 1000; // Плоская ставка за нарушение возврата на станцию, можно настроить через конфигурацию
+      fine.status = FineStatus.PENDING; // Штраф ожидает оплаты
+      fine.description = violationDescription || `Ride ${rideId} returned outside station area`;
+      fine.user_id = userId;
+
+      // Устанавливаем срок оплаты штрафа (например, 30 дней с момента нарушения)
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+      fine.due_date = dueDate;
+
+      const savedFine = await fineRepository.save(fine);
+
+      console.log(`Fine created for user ${userId} for violation: ${savedFine.description}, amount: ${savedFine.amount}`);
+
+      return savedFine;
+    } catch (error) {
+      console.error('Error creating fine for ride violation:', error);
+      throw error;
+    }
+  }
+
+  // Метод для создания штрафа за повреждение транспорта
+  static async createFineForVehicleDamage(userId: string, damageDescription: string, amount: number): Promise<Fine> {
+    try {
+      const fineRepository = getRepository(Fine);
+
+      // 7.3.2. Логика штрафов: повреждения
+      const fine = new Fine();
+      fine.type = FineType.VEHICLE_DAMAGE;
+      fine.amount = amount;
+      fine.status = FineStatus.PENDING;
+      fine.description = damageDescription;
+      fine.user_id = userId;
+
+      // Устанавливаем срок оплаты штрафа (например, 30 дней с момента нарушения)
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+      fine.due_date = dueDate;
+
+      const savedFine = await fineRepository.save(fine);
+
+      console.log(`Fine for vehicle damage created for user ${userId}: ${savedFine.description}, amount: ${savedFine.amount}`);
+
+      return savedFine;
+    } catch (error) {
+      console.error('Error creating fine for vehicle damage:', error);
+      throw error;
+    }
+  }
+
+  // Метод для получения всех штрафов пользователя
+  static async getUserFines(userId: string): Promise<Fine[]> {
+    try {
+      const fineRepository = getRepository(Fine);
+
+      const fines = await fineRepository.find({
+        where: { user_id: userId },
+        order: { created_at: 'DESC' }
+      });
+
+      return fines;
+    } catch (error) {
+      console.error('Error getting user fines:', error);
+      throw error;
+    }
+  }
+
+  // Метод для проверки, есть ли у пользователя неоплаченные штрафы
+  static async hasUnpaidFines(userId: string): Promise<boolean> {
+    try {
+      const fineRepository = getRepository(Fine);
+
+      const unpaidFine = await fineRepository.findOne({
+        where: {
+          user_id: userId,
+          status: FineStatus.PENDING
+        }
+      });
+
+      return unpaidFine !== undefined;
+    } catch (error) {
+      console.error('Error checking for unpaid fines:', error);
+      throw error;
+    }
+  }
 }

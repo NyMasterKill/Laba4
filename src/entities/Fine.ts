@@ -6,13 +6,14 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Generated,
 } from 'typeorm';
 import { User } from './User';
 
 export enum FineType {
-  WRONG_STATION_RETURN = 'wrong_station_return',
+  STATION_RETURN_VIOLATION = 'station_return_violation',
   VEHICLE_DAMAGE = 'vehicle_damage',
-  OVERDUE_RETURN = 'overdue_return',
+  LATE_RETURN = 'late_return',
   OTHER = 'other',
 }
 
@@ -46,8 +47,8 @@ export class Fine {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  due_date: Date; // срок оплаты
+  @Column({ type: 'timestamp', nullable: true })
+  due_date: Date;
 
   @CreateDateColumn()
   created_at: Date;
@@ -56,8 +57,11 @@ export class Fine {
   updated_at: Date;
 
   @ManyToOne(() => User, (user) => user.fines, {
-    onDelete: 'CASCADE'
+    onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  @Column({ name: 'user_id', nullable: true })
+  user_id: string;
 }
