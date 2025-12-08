@@ -5,6 +5,7 @@ import 'map_screen.dart';
 import 'profile_screen.dart';
 import 'support_screen.dart';
 import 'subscriptions_screen.dart';
+import 'fines_screen.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key});
@@ -18,6 +19,7 @@ class AppShell extends StatelessWidget {
             index: appProvider.selectedIndex,
             children: const [
               MapScreen(),
+              FinesScreen(), // 7.5.2. Создать экран «Штрафы» (список, статусы)
               ProfileScreen(),
               SupportScreen(),
               SubscriptionsScreen(),
@@ -36,6 +38,10 @@ class AppShell extends StatelessWidget {
               BottomNavigationBarItem(
                 icon: Icon(Icons.map),
                 label: 'Карта',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.warning),
+                label: 'Штрафы',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person),

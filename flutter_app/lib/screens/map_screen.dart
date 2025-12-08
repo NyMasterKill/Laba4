@@ -7,6 +7,7 @@ import '../widgets/vehicle_card.dart'; // Импортируем новый ви
 import '../services/cache_service.dart'; // Импортируем CacheService
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../widgets/block_notification_banner.dart'; // 7.5.4. Реализовать уведомление о блокировке
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -212,59 +213,62 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Карта'),
-      ),
-      body: Stack(
-        children: [
-          // Карта
-          YandexMap(
-            onMapCreated: (YandexMapController yandexMapController) async {
-              controller = yandexMapController;
-              // Пример настройки тёмной темы карты
-              // Используем JSON-описание стиля для тёмной темы
-              const darkThemeStyle = r'''
-              {
-                "base": {
-                  "scheme": "v9dark"
-                },
-                "layers": {
-                  "roads": {
-                    "style": "simplified"
+    // 7.5.4. Реализовать уведомление о блокировке
+    return BlockNotificationBanner(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Карта'),
+        ),
+        body: Stack(
+          children: [
+            // Карта
+            YandexMap(
+              onMapCreated: (YandexMapController yandexMapController) async {
+                controller = yandexMapController;
+                // Пример настройки тёмной темы карты
+                // Используем JSON-описание стиля для тёмной темы
+                const darkThemeStyle = r'''
+                {
+                  "base": {
+                    "scheme": "v9dark"
+                  },
+                  "layers": {
+                    "roads": {
+                      "style": "simplified"
+                    }
                   }
                 }
-              }
-              ''';
-              try {
-                await controller.setMapStyle(style: MapStyle.loadStyleString(darkThemeStyle));
-              } catch (e) {
-                // Обработка ошибки загрузки стиля и уведомление пользователя
-                print('Failed to load dark map style: $e');
-                // Используем ScaffoldMessenger для показа сообщения об ошибке
-                // Это позволяет отобразить SnackBar поверх текущего Scaffold
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Ошибка при загрузке темы карты: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            // Передаём сгенерированные объекты на карту
-            mapObjects: _mapObjects,
-            focalPoint: Point(longitude: 37.6184, latitude: 55.7512),
-            zoom: 15,
-          ),
-          // Индикатор загрузки поверх карты
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3), // Полупрозрачный оверлей
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
+                ''';
+                try {
+                  await controller.setMapStyle(style: MapStyle.loadStyleString(darkThemeStyle));
+                } catch (e) {
+                  // Обработка ошибки загрузки стиля и уведомление пользователя
+                  print('Failed to load dark map style: $e');
+                  // Используем ScaffoldMessenger для показа сообщения об ошибке
+                  // Это позволяет отобразить SnackBar поверх текущего Scaffold
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Ошибка при загрузке темы карты: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              // Передаём сгенерированные объекты на карту
+              mapObjects: _mapObjects,
+              focalPoint: Point(longitude: 37.6184, latitude: 55.7512),
+              zoom: 15,
             ),
-        ],
+            // Индикатор загрузки поверх карты
+            if (_isLoading)
+              Container(
+                color: Colors.black.withOpacity(0.3), // Полупрозрачный оверлей
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
