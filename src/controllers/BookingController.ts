@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
+import { getRepository } from 'typeorm';
 import { BookingService } from '../services/BookingService';
 import { AuthenticatedRequest } from '../middleware/authMiddleware'; // Импортируем типизированный Request
+import { Fine, FineStatus } from '../entities/Fine';
 
 export class BookingController {
   private bookingService: BookingService;
@@ -17,6 +19,33 @@ export class BookingController {
       if (!userId) {
         // Это вряд ли произойдёт, если middleware сработал корректно
         res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      // 7.4.1. Реализовать middleware: checkUnpaidFines(user_id)
+      // Проверяем, есть ли у пользователя неоплаченные штрафы
+      const fineRepository = getRepository(Fine);
+
+      const unpaidFine = await fineRepository.findOne({
+        where: {
+          user_id: userId,
+          status: FineStatus.PENDING
+        }
+      });
+
+      if (unpaidFine) {
+        // 7.4.2. Возврат 403 Forbidden при наличии штрафов
+        res.status(403).json({
+          error: 'User has unpaid fines',
+          details: 'Cannot create a new booking until fines are paid',
+          unpaid_fine: {
+            id: unpaidFine.id,
+            type: unpaidFine.type,
+            amount: unpaidFine.amount,
+            description: unpaidFine.description,
+            due_date: unpaidFine.due_date
+          }
+        });
         return;
       }
 
