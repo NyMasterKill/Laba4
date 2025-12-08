@@ -345,6 +345,118 @@ export class RideController {
     }
   };
 
+  // 7.1.1. Валидация: ride_id, user_id
+  static async validateRideForFinish = async (req: Request, res: Response): Promise<{isValid: boolean, ride?: Ride, userId?: string} | null> => {
+    try {
+      const { id } = req.params;
+      const user_id = (req as any).user?.id;
+
+      if (!id) {
+        res.status(400).json({ error: 'Ride ID is required' });
+        return null;
+      }
+
+      if (!user_id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return null;
+      }
+
+      const rideRepository = getRepository(Ride);
+      const ride = await rideRepository.findOne({
+        where: {
+          id: id,
+          user_id: user_id
+        },
+        relations: ['vehicle']
+      });
+
+      if (!ride) {
+        res.status(404).json({
+          error: 'Ride not found',
+          details: 'Ride does not exist or does not belong to the user'
+        });
+        return null;
+      }
+
+      // Проверка, что поездка еще в процессе
+      if (ride.status !== RideStatus.IN_PROGRESS) {
+        res.status(400).json({
+          error: 'Ride is not in progress',
+          status: ride.status,
+          details: 'Cannot finish a ride that is not in progress'
+        });
+        return null;
+      }
+
+      return {
+        isValid: true,
+        ride: ride,
+        userId: user_id
+      };
+    } catch (error) {
+      console.error('Error validating ride for finish:', error);
+      res.status(500).json({ error: 'Internal server error' });
+      return null;
+    }
+  };
+
+  // 7.1. PUT /rides/:id/finish - завершение поездки
+  static async finishRide = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      // 7.1.1. Валидация: ride_id, user_id
+      const validation = await RideController.validateRideForFinish(req, res);
+
+      // Если валидация не пройдена, ответ уже отправлен
+      if (!validation || !validation.isValid) {
+        return res; // Ответ уже отправлен валидацией
+      }
+
+      const { ride, userId } = validation;
+
+      // 7.1.2. Обновление rides.status = 'completed'
+      ride.status = RideStatus.COMPLETED;
+      ride.end_time = new Date();
+
+      // 7.1.4. Сохранение итоговой стоимости
+      try {
+        ride.total_cost = await RideController.calculateRideCost(ride.id);
+        console.log(`Ride ${ride.id} total cost calculated: ${ride.total_cost} RUB`);
+      } catch (costError) {
+        console.error(`Failed to calculate ride cost for ride ${ride.id}:`, costError);
+        return res.status(500).json({ error: 'Failed to calculate ride cost' });
+      }
+
+      const rideRepository = getRepository(Ride);
+      const updatedRide = await rideRepository.save(ride);
+
+      // 7.1.3. Обновление vehicles.status = 'available'
+      if (ride.vehicle) {
+        const vehicleRepository = getRepository(Vehicle);
+        const vehicle = ride.vehicle; // Уже загружен через relations
+        vehicle.status = 'available';
+        await vehicleRepository.save(vehicle);
+
+        console.log(`Vehicle ${vehicle.id} status updated to 'available' after ride completion`);
+      }
+
+      return res.status(200).json({
+        message: 'Ride finished successfully',
+        ride: {
+          id: updatedRide.id,
+          status: updatedRide.status,
+          start_time: updatedRide.start_time,
+          end_time: updatedRide.end_time,
+          total_cost: updatedRide.total_cost,
+          vehicle_id: updatedRide.vehicle_id,
+          user_id: updatedRide.user_id
+        }
+      });
+    } catch (error) {
+      console.error('Error finishing ride:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  };
+
   // Метод для валидации брони
   static async validateBookingForRide(booking_id: string, user_id: string) {
     const bookingRepository = getRepository(Booking);
