@@ -10,6 +10,7 @@ import bookingRoutes from './routes/bookingRoutes'; // Импортируем м
 import rideRoutes from './routes/ride'; // Импортируем маршруты поездок
 import paymentRoutes from './routes/payment'; // Импортируем маршруты оплаты
 import tariffSubscriptionRoutes from './routes/tariffSubscription'; // Импортируем маршруты тарифов и подписок
+import supportTicketRoutes from './routes/supportTicketRoutes'; // Импортируем маршруты поддержки
 import { BookingExpirationService } from './services/BookingExpirationService'; // Импорт сервиса
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api', bookingRoutes); // Добавляем маршруты для б
 app.use('/api', rideRoutes); // Добавляем маршруты для поездок
 app.use('/api', paymentRoutes); // Добавляем маршруты для оплаты
 app.use('/api', tariffSubscriptionRoutes); // Добавляем маршруты для тарифов и подписок
+app.use('/api', supportTicketRoutes); // Добавляем маршруты для поддержки
 
 // Basic health check endpoint
 app.get('/health', (req, res) => {
