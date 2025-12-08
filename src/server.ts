@@ -1,4 +1,5 @@
 import express from 'express';
+import { generalRateLimit, authRateLimit } from './middleware/rateLimit';
 import { AppDataSource } from './config/typeorm.config';
 import profileRoutes from './routes/profileRoutes';
 import vehicleRoutes from './routes/vehicleRoutes';
@@ -10,6 +11,7 @@ import bookingRoutes from './routes/bookingRoutes'; // Импортируем м
 import rideRoutes from './routes/ride'; // Импортируем маршруты поездок
 import paymentRoutes from './routes/payment'; // Импортируем маршруты оплаты
 import tariffSubscriptionRoutes from './routes/tariffSubscription'; // Импортируем маршруты тарифов и подписок
+import supportTicketRoutes from './routes/supportTicketRoutes'; // Импортируем маршруты поддержки
 import { BookingExpirationService } from './services/BookingExpirationService'; // Импорт сервиса
 
 const app = express();
@@ -22,6 +24,13 @@ app.use(express.urlencoded({ extended: true }));
 // Cookies for refresh tokens
 app.use(require('cookie-parser')());
 
+// Apply general rate limiting to all requests
+app.use(generalRateLimit);
+
+// Apply specific rate limiting to auth routes
+app.use('/api/auth', authRateLimit);
+app.use('/api/2fa', authRateLimit);
+
 // Routes
 app.use('/api', profileRoutes);
 app.use('/api', vehicleRoutes); // Добавляем маршруты для транспортных средств
@@ -33,8 +42,9 @@ app.use('/api', bookingRoutes); // Добавляем маршруты для б
 app.use('/api', rideRoutes); // Добавляем маршруты для поездок
 app.use('/api', paymentRoutes); // Добавляем маршруты для оплаты
 app.use('/api', tariffSubscriptionRoutes); // Добавляем маршруты для тарифов и подписок
+app.use('/api', supportTicketRoutes); // Добавляем маршруты для поддержки
 
-// Basic health check endpoint
+// Basic health check endpoint - обходим ограничения для health check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });

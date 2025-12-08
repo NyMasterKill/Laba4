@@ -166,21 +166,38 @@ export class UserService {
 
   private async verifyRefreshTokenInDB(refreshToken: string): Promise<UserSession | null> {
     try {
-      // Хэшируем полученный токен
-      const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
+      // Находим все сессии для пользователя (так как мы не можем напрямую сравнить хеш с токеном)
+      // Вместо этого мы будем использовать подход с токенами, которые можно верифицировать
+      // Проверим, что токен не истек и что он соответствует пользователю
 
-      // Находим сессию по хэшированному токену
+      // Декодируем токен, чтобы получить userId
+      const decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET || 'default_refresh_secret_key'
+      ) as { userId: string };
+
+      // Находим сессии пользователя
       const now = new Date();
-      const session = await this.userSessionRepository.findOne({
+      const sessions = await this.userSessionRepository.find({
         where: {
-          refresh_token_hash: refreshTokenHash,
+          user: { id: decoded.userId },
           is_active: true,
           expires_at: MoreThanOrEqual(now)
-        },
-        relations: ['user']
+        }
       });
 
-      return session;
+      // Проверяем каждый токен в сессиях
+      for (const session of sessions) {
+        const tokenValid = await bcrypt.compare(refreshToken, session.refresh_token_hash);
+        if (tokenValid) {
+          // Обновляем время истечения сессии при использовании (обновление токена)
+          session.expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          await this.userSessionRepository.save(session);
+          return session;
+        }
+      }
+
+      return null;
     } catch (error) {
       console.error('Error checking refresh token in DB:', error);
       return null;
