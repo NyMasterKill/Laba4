@@ -8,6 +8,7 @@ import { Subscription, SubscriptionStatus } from '../entities/Subscription';
 import { TariffPlan } from '../entities/TariffPlan';
 import { Payment, PaymentStatus, PaymentMethod } from '../entities/Payment';
 import { BookingStatus, RideStatus } from '../entities/Booking';
+import { Station } from '../entities/Station';
 import { RideTrackingService } from '../services/RideTrackingService';
 
 export class RideController {
@@ -388,4 +389,248 @@ export class RideController {
       vehicle_id: booking.vehicle.id
     };
   }
+
+  // 7.2.1. Получить координаты станций
+  static async getAllStations() {
+    try {
+      const stationRepository = getRepository(Station);
+      const stations = await stationRepository.find({
+        where: { is_active: true }
+      });
+      return stations;
+    } catch (error) {
+      console.error('Error getting stations:', error);
+      throw error;
+    }
+  }
+
+  // 7.2.2. Проверка distance(user, nearest_station) <= 50 м
+  static async isWithinStationRadius(user_lat: number, user_lng: number): Promise<{ isWithinRadius: boolean; nearestStation?: Station; distance?: number }> {
+    try {
+      const stations = await RideController.getAllStations();
+
+      if (stations.length === 0) {
+        console.warn('No active stations found');
+        return { isWithinRadius: false };
+      }
+
+      let minDistance = Infinity;
+      let nearestStation: Station | undefined;
+
+      // Считаем расстояния до всех станций
+      for (const station of stations) {
+        const distance = RideController.calculateDistance(
+          user_lat,
+          user_lng,
+          station.lat,
+          station.lng
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestStation = station;
+        }
+      }
+
+      // 7.2.2. Проверка: расстояние до ближайшей станции <= 50 м
+      const isWithinRadius = minDistance <= 50; // метров
+
+      console.log(`User is ${isWithinRadius ? 'within' : 'outside'} station radius. Distance to nearest station: ${minDistance.toFixed(2)} m`);
+
+      return {
+        isWithinRadius,
+        nearestStation,
+        distance: minDistance
+      };
+    } catch (error) {
+      console.error('Error checking station radius:', error);
+      throw error;
+    }
+  }
+
+  // Вспомогательный метод для расчета расстояния между двумя точками (в метрах)
+  static calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    // Используем формулу гаверсинуса для расчета расстояния на сфере (Земле)
+    const R = 6371e3; // Радиус Земли в метрах
+    const φ1 = lat1 * Math.PI/180; // φ, λ в радианах
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Расстояние в метрах
+  }
+
+  // 7.1.1. Валидация: ride_id, user_id
+  static async validateRideForFinish = async (req: Request, res: Response): Promise<{isValid: boolean, ride?: Ride, userId?: string} | null> => {
+    try {
+      const { id } = req.params;
+      const user_id = (req as any).user?.id;
+
+      if (!id) {
+        res.status(400).json({ error: 'Ride ID is required' });
+        return null;
+      }
+
+      if (!user_id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return null;
+      }
+
+      const rideRepository = getRepository(Ride);
+      const ride = await rideRepository.findOne({
+        where: {
+          id: id,
+          user_id: user_id
+        },
+        relations: ['vehicle']
+      });
+
+      if (!ride) {
+        res.status(404).json({
+          error: 'Ride not found',
+          details: 'Ride does not exist or does not belong to the user'
+        });
+        return null;
+      }
+
+      // Проверка, что поездка еще в процессе
+      if (ride.status !== RideStatus.IN_PROGRESS) {
+        res.status(400).json({
+          error: 'Ride is not in progress',
+          status: ride.status,
+          details: 'Cannot finish a ride that is not in progress'
+        });
+        return null;
+      }
+
+      return {
+        isValid: true,
+        ride: ride,
+        userId: user_id
+      };
+    } catch (error) {
+      console.error('Error validating ride for finish:', error);
+      res.status(500).json({ error: 'Internal server error' });
+      return null;
+    }
+  };
+
+  // 7.1. PUT /rides/:id/finish - завершение поездки
+  static async finishRide = async (req: Request, res: Response): Promise<Response> => {
+    try {
+      // 7.1.1. Валидация: ride_id, user_id
+      const validation = await RideController.validateRideForFinish(req, res);
+
+      // Если валидация не пройдена, ответ уже отправлен
+      if (!validation || !validation.isValid) {
+        return res; // Ответ уже отправлен валидацией
+      }
+
+      const { ride, userId } = validation;
+
+      // 7.2.1. Получить координаты станций
+      // 7.2.2. Проверка: возврат на станцию (геозона ±50 м)
+      let isWithinStationRadius = false;
+      let violationDetails = '';
+
+      if (ride.end_lat && ride.end_lng) {
+        // Если доступны координаты окончания поездки, проверяем, вернулся ли пользователь на станцию
+        try {
+          const stationCheck = await RideController.isWithinStationRadius(ride.end_lat, ride.end_lng);
+          isWithinStationRadius = stationCheck.isWithinRadius;
+
+          if (!isWithinStationRadius) {
+            violationDetails = `User finished ride ${stationCheck.distance?.toFixed(2)} meters away from nearest station`;
+            // 7.2.3. Логгирование нарушений
+            console.log(`Ride violation detected for ride ${ride.id}: ${violationDetails}`);
+          }
+        } catch (stationCheckError) {
+          console.error('Error checking station radius:', stationCheckError);
+          // Продолжаем выполнение, даже если не удалось проверить станцию
+          violationDetails = 'Failed to verify return to station due to system error';
+        }
+      } else {
+        // Если координаты окончания не доступны, используем стартовые координаты
+        // или координаты транспорта на момент завершения
+        if (ride.vehicle && ride.vehicle.current_lat && ride.vehicle.current_lng) {
+          try {
+            const stationCheck = await RideController.isWithinStationRadius(ride.vehicle.current_lat, ride.vehicle.current_lng);
+            isWithinStationRadius = stationCheck.isWithinRadius;
+
+            if (!isWithinStationRadius) {
+              violationDetails = `User finished ride near ${stationCheck.distance?.toFixed(2)} meters from nearest station`;
+              // 7.2.3. Логгирование нарушений
+              console.log(`Ride violation detected for ride ${ride.id}: ${violationDetails}`);
+            }
+          } catch (stationCheckError) {
+            console.error('Error checking station radius:', stationCheckError);
+            violationDetails = 'Failed to verify return to station due to system error';
+          }
+        } else {
+          // Если не можем определить местоположение, считаем нарушение
+          isWithinStationRadius = false;
+          violationDetails = 'No location data available to verify return to station';
+          console.log(`Ride violation detected for ride ${ride.id}: ${violationDetails}`);
+        }
+      }
+
+      // 7.1.2. Обновление rides.status = 'completed'
+      ride.status = RideStatus.COMPLETED;
+      ride.end_time = new Date();
+
+      // 7.1.4. Сохранение итоговой стоимости
+      try {
+        ride.total_cost = await RideController.calculateRideCost(ride.id);
+        console.log(`Ride ${ride.id} total cost calculated: ${ride.total_cost} RUB`);
+      } catch (costError) {
+        console.error(`Failed to calculate ride cost for ride ${ride.id}:`, costError);
+        return res.status(500).json({ error: 'Failed to calculate ride cost' });
+      }
+
+      const rideRepository = getRepository(Ride);
+      const updatedRide = await rideRepository.save(ride);
+
+      // 7.1.3. Обновление vehicles.status = 'available'
+      if (ride.vehicle) {
+        const vehicleRepository = getRepository(Vehicle);
+        const vehicle = ride.vehicle; // Уже загружен через relations
+        vehicle.status = 'available';
+        await vehicleRepository.save(vehicle);
+
+        console.log(`Vehicle ${vehicle.id} status updated to 'available' after ride completion`);
+      }
+
+      // Подготовим ответ
+      const response: any = {
+        message: 'Ride finished successfully',
+        ride: {
+          id: updatedRide.id,
+          status: updatedRide.status,
+          start_time: updatedRide.start_time,
+          end_time: updatedRide.end_time,
+          total_cost: updatedRide.total_cost,
+          vehicle_id: updatedRide.vehicle_id,
+          user_id: updatedRide.user_id
+        }
+      };
+
+      // Если обнаружено нарушение (не вернулся на станцию), добавим информацию о нарушении
+      if (!isWithinStationRadius) {
+        response.violation_details = violationDetails;
+        response.return_to_station_required = false;
+      } else {
+        response.return_to_station_verified = true;
+      }
+
+      return res.status(200).json(response);
+    } catch (error) {
+      console.error('Error finishing ride:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  };
 }
